@@ -1,9 +1,0 @@
-<?php
-
-try{
-        $f = fopen($file_log="spia-unidad.log", "r") or die("unable open file");
-        echo nl2br(fread($f,filesize($file_log)));
-        fclose($f);
-}catch(Exception $e){ 
-        die("Unable open file: ".$e->getMessage());
-}
