@@ -24,10 +24,16 @@ do
     then
         value_match=$dir$file":"${mime_type[-1]}
         list_match+=(\"$dir$file\")
-        if [[ ! -d "$dir$move_to" ]]
+        if [[ ! -d "$dir$move_to" ]] && [[ ! -d "$move_to" ]]
         then 
-            echo "directory $dir$move_to created ..."
-            mkdir "$dir$move_to"
+            if [[ "$move_to" == "$dir"* ]]
+            then
+                echo "directory $move_to created ..."
+                mkdir "$move_to"
+            else
+            	echo "directory $dir$move_to created ..."
+            	mkdir "$dir$move_to"
+            fi
         fi
         if [[ $match == "image/jpeg" ]]
         then
