@@ -33,22 +33,56 @@ const CRC16TAB = [
     0x6B46, 0x7ACF, 0x4854, 0x59DD, 0x2D62, 0x3CEB, 0x0E70, 0x1FF9,
     0xF78F, 0xE606, 0xD49D, 0xC514, 0xB1AB, 0xA022, 0x92B9, 0x8330,
     0x7BC7, 0x6A4E, 0x58D5, 0x495C, 0x3DE3, 0x2C6A, 0x1EF1, 0x0F78,]
-function getCrc16(packet, packet_len) {
-    console.log('packet', packet)
+function getCrc16(packet) {
     let fcs = FCS 
-    let packet_point = packet
-    while (packet_len>0) {
+    packet_len = packet.length
+    packet_index = 0
+    console.log('packet', packet, 'packet_len', packet_len)
+    while (packet_len>packet_index) {
         const fcs_8 = (fcs >> 8)
-        console.log(fcs,'fcs_8',fcs_8)
+        const packet_point = packet[packet_index]
         const crc16_key = (fcs ^ packet_point) & FCEND
-        console.log('packet_index', (fcs ^ packet_point))
-        fcs = /* fcs_8 */ (fcs >> 8) ^ CRC16TAB[/* crc16_key */(fcs ^ packet_point) & FCEND]
-        packet_len--
-        packet_point = fcs
+        fcs = fcs_8  ^ CRC16TAB[crc16_key]
+        packet_index ++
     }
-    return ~fcs
+    return fcs ^ FCS
 } 
+
+const crcTable = CRC16TAB
+function crc16Ex(buff, options = { encodingOutput: true }) {
+    var crcX = parseInt("FFFF", 16)
+    var cr1 = parseInt("FF", 16)
+    var i = 0
+    if (Buffer.isBuffer(buff)) {
+       buff = buff.toString('hex')
+    } else {
+       buff = buff.toString(16)
+    } 
+    while (i < buff.length) {
+       str = buff.substring(i, i + 2)
+       str_hex = parseInt(str, 16) 
+       j = (crcX ^ str_hex) & cr1
+       /* console.log('j',j,'str_hex',str_hex,'crcX',crcX,'cr1',cr1) */
+       crcX = (crcX >> 8) ^ crcTable[j]
+       /* console.log('fcs', crcX, 'fcs_8', (crcX >> 8),'crcTable ?', crcTable[j]) */
+       i = i + 2
+    } 
+    crcX = crcX ^ 0xffff 
+    if (options.encodingOutput){
+       crcX = crcX.toString(16) 
+    }
+    return crcX
+ }
+
 const request = '11010862476050181949803900090021'
-const result = getCrc16(Buffer.from(request,'hex'),17)
+const request_before = '11010862476050181949803900090021'
+const result = getCrc16(Buffer.from(request,'hex'))
 console.log(request,":", Buffer.from(request,'hex'),
  '=>', result, result.toString(16))
+ console.log( parseInt('5e15',16), '====>', crc16Ex(Buffer.from(request,'hex')))
+/* const crc_1_mod = require('./crc_calc')
+const result_generic = crc_1_mod.calculate_crc(0,Buffer.from(request,'hex'),0x8408)
+console.log('result_generic', result_generic) */
+
+
+
