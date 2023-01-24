@@ -37,7 +37,7 @@ function getCrc16(packet) {
     let fcs = FCS 
     packet_len = packet.length
     packet_index = 0
-    console.log('packet', packet, 'packet_len', packet_len)
+    /* console.log('packet', packet, 'packet_len', packet_len) */
     while (packet_len>packet_index) {
         const fcs_8 = (fcs >> 8)
         const packet_point = packet[packet_index]
@@ -75,14 +75,16 @@ function crc16Ex(buff, options = { encodingOutput: true }) {
  }
 
 const request = '11010862476050181949803900090021'
-const request_before = '11010862476050181949803900090021'
+const request_2 = '05010005'
 const result = getCrc16(Buffer.from(request,'hex'))
-console.log(request,":", Buffer.from(request,'hex'),
+console.log(/* request,":", */ Buffer.from(request,'hex'),
  '=>', result, result.toString(16))
- console.log( parseInt('5e15',16), '====>', crc16Ex(Buffer.from(request,'hex')))
+const result_2 = getCrc16(Buffer.from(request_2, 'hex'))
+/*  console.log( parseInt('5e15',16), '====>', crc16Ex(Buffer.from(request,'hex'))) */
 /* const crc_1_mod = require('./crc_calc')
 const result_generic = crc_1_mod.calculate_crc(0,Buffer.from(request,'hex'),0x8408)
 console.log('result_generic', result_generic) */
-
+console.log(/* request_2,":", */ Buffer.from(request_2,'hex'),
+ '=>', result_2, result_2.toString(16)/* , '9FF8' */)
 
 
