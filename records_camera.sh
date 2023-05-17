@@ -7,19 +7,23 @@
 # 4. SQL insert content as hex block per block
 BYTEBLOCK_LIMIT=1024
 MEDIA_FOLDER="/home/ubuntu/media/"
-echo "LIST $MEDIA_FOLDER"
-ls -tl $MEDIA_FOLDER
-BACKUP_FOLDER="/home/ubuntu/bk/"
 if [[ "$1" != "" ]]
 then
     MEDIA_FOLDER=$1
 fi
+echo "LIST $MEDIA_FOLDER"
+ls -tl $MEDIA_FOLDER
 SQL_FOLDER="/home/ubuntu/"
 if [[ "$2" != "" ]]
 then
     SQL_FOLDER=$2
 fi
-PGSQL_HOST="200.91.236.122"
+BACKUP_FOLDER="/home/ubuntu/bk/"
+if [[ "$3" != "" ]]
+then
+    BACKUP_FOLDER=$3
+fi
+PGSQL_HOST="192.168.20.80"
 PGSQL_USER="spiadbadmin"
 PGSQL_DBNAME="spiaview"
 PGSQL_PORT=5432
@@ -35,11 +39,14 @@ TEMP_INSERT_FILE="temp_insert.sql"
 TEMP_SELECT_FILE="temp_select.sql"
 TEMP_SELECT_RESULT="temp_select_result.tmp"
 {
-  list_media_files=($(ls "$MEDIA_FOLDER"))
+  list_media_files=($(find "$MEDIA_FOLDER" -name *".h265"))
+  echo "=== SCANNING MEDIA FILES ==="
+  echo ${list_media_files[*]}
 } || {
   echo "Error! on list_media_files $MEDIA_FOLDER"
   exit
 }
+echo "=== START READING FILES ==="
 for file in ${list_media_files[*]}
 do
     {
@@ -50,7 +57,11 @@ do
             echo "file rejected: $file"
             continue
         fi
-        input=$MEDIA_FOLDER$file
+        input=$file
+        if [[ "$file" != "$MEDIA_FOLDER"* ]]
+        then
+            input=$MEDIA_FOLDER$file
+        fi
         if test -f "$input"
         then
             echo "$input exists."
@@ -60,7 +71,7 @@ do
         fi
         line_offset=0
         record_offset=0
-        IFS='_' read -ra file_name_split <<< "$file"
+        IFS='/' read -ra file_name_split <<< "$file"
         device_id='00030efafb4bd16a7c000400'
         timestamp=$(date '+%s')"000"
         orientation='undefined'
@@ -68,12 +79,20 @@ do
         then
             echo "file_name_split: "${file_name_split[*]}
             {
-              device_id=${file_name_split[-4]}
+              device_index=$((-2))
+              device_id=${file_name_split[device_index]}
             }||{
               device_id='00030efafb4bd16a7c000400'
             }
             {
-              timestamp=${file_name_split[-5]}
+              timestamp_index=$((-1))
+              IFS='.' read -ra file_date_split <<< "${file_name_split[timestamp_index]}"
+              timestamp_index=$((-2))
+              file_split_timestamp=${file_date_split[timestamp_index]}
+              IFS='_' read -ra file_name_split_timestamp <<< "$file_split_timestamp"
+              timestamp_index=$((-3))
+              timestamp=${file_name_split_timestamp[timestamp_index]}
+              timestamp=$(date -d "${timestamp:0:10} ${timestamp:10:2}:${timestamp:12:2}:${timestamp:14:2}" '+%s')
             } || {
               timestamp=$(date '+%s')"000"
             }
@@ -82,7 +101,16 @@ do
               timestamp=$(date '+%s')"000"
             fi
             {
-              orientation=${file_name_split[-3]}
+              if [[ "$file" == *"_front"* ]]
+              then
+                orientation="front"
+              elif [[ "$file" == *"_rear"* ]]
+              then
+                orientation="rear"
+              else
+                orientation='both'
+              fi
+              echo "$file cam is ($orientation)."
             } || {
               orientation='both'
             }
@@ -93,15 +121,17 @@ do
         #mime_type="${mime_type[1]}"
         # END: validate mime-type
         mime_type="image/jpeg"
-        if [[ "$file" == *"_video" ]]
+        if [[ "$file" == *"_video"* ]]
         then
           mime_type="application/octet-stream"
           echo ".... $file is a video ...."
-        else
+        elif [[ "$file" == *"_image"* ]]
+        then
           echo ".... $file is an image ...."
         fi
         # BEGIN: validate temp_file
         echo "SELECT * FROM $PGSQL_TABLE_PARENT_NAME WHERE temp_file = '$file' AND mime_type like '$mime_type';" > $SQL_FOLDER$TEMP_SELECT_FILE
+        echo "=== SCANNING $TEMP_INSERT_FILE ==="
         cat $SQL_FOLDER$TEMP_INSERT_FILE
         #cat $SQL_FOLDER$TEMP_SELECT_FILE >> $SQL_FOLDER"inserts_records.sql"
         psql -h $PGSQL_HOST -U $PGSQL_USER -d $PGSQL_DBNAME -p $PGSQL_PORT -f $SQL_FOLDER$TEMP_SELECT_FILE > $SQL_FOLDER$TEMP_SELECT_RESULT
@@ -126,7 +156,9 @@ do
         echo "()=>$input [$device_id, $timestamp,$mime_type,$file,$orientation] reading ... \n"
         if [[ "$file_key" == "" ]] || [[ "$file_key" == "sq1.last_value" ]]
         then
-          echo "INSERT INTO $PGSQL_TABLE_PARENT_NAME ($PGSQL_PARENT_COLUMN) VALUES ('$device_id', to_timestamp($timestamp/1000),'$mime_type','$file','$orientation');" > $SQL_FOLDER$TEMP_INSERT_FILE
+          # /1000
+          echo "INSERT INTO $PGSQL_TABLE_PARENT_NAME ($PGSQL_PARENT_COLUMN) VALUES ('$device_id', to_timestamp($timestamp),'$mime_type','$file','$orientation');" > $SQL_FOLDER$TEMP_INSERT_FILE
+          echo "=== CHECK $TEMP_INSERT_FILE ==="
           cat $SQL_FOLDER$TEMP_INSERT_FILE
           cat $SQL_FOLDER$TEMP_INSERT_FILE >> $SQL_FOLDER"inserts_records.sql"
           psql -h $PGSQL_HOST -U $PGSQL_USER -d $PGSQL_DBNAME -p $PGSQL_PORT -f $SQL_FOLDER$TEMP_INSERT_FILE
@@ -172,6 +204,7 @@ do
             block=$lines
             echo "INSERT INTO $PGSQL_TABLE_NAME ($PGSQL_COLUMN) VALUES ('$block', $record_offset);" > $SQL_FOLDER$TEMP_INSERT_FILE
             echo "INSERT INTO $PGSQL_TABLE_CROSS_NAME ($PGSQL_CROSS_COLUMN) SELECT $file_key, sq2.last_value FROM $PGSQL_TABLE_PARENT_SEQUENCE sq1, $PGSQL_TABLE_SEQUENCE sq2;" >> $SQL_FOLDER$TEMP_INSERT_FILE
+            echo "=== CHECK $TEMP_INSERT_FILE (2) ==="
             cat $SQL_FOLDER$TEMP_INSERT_FILE
             #cat $SQL_FOLDER$TEMP_INSERT_FILE >> $SQL_FOLDER"inserts_records.sql"
             psql -h $PGSQL_HOST -U $PGSQL_USER -d $PGSQL_DBNAME -p $PGSQL_PORT -f $SQL_FOLDER$TEMP_INSERT_FILE
