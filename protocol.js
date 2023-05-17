@@ -682,6 +682,7 @@ exports.run_fsm = function (current_state, connection, cmd_id, data_buffer, devi
         }
     }
 
+    let camera_direction = 'video_rear';
     if (current_state == FSM_STATE.INIT) {
         //Create dir with device IMEI if it doesn't exist
         if (!fs.existsSync(media_folder)) {
@@ -719,18 +720,21 @@ exports.run_fsm = function (current_state, connection, cmd_id, data_buffer, devi
                 device_info.setExtension(".h265");
                 device_info.setCameraType(CAMERA_TYPE.DUALCAM)
                 file_available = true;
+                camera_direction = 'video_front';
             } else if (option_byte & 0x08) {
                 dbg.logAndPrint("DualCam rear photo available!");
                 device_info.setFileToDL(DUALCAM_FILE_PATH.DUALCAM_PHOTO_REAR);
                 device_info.setExtension(".jpeg");
                 device_info.setCameraType(CAMERA_TYPE.DUALCAM)
                 file_available = true;
+                camera_direction = 'photo_rear';
             } else if (option_byte & 0x04) {
                 dbg.logAndPrint("DualCam front photo available!");
                 device_info.setFileToDL(DUALCAM_FILE_PATH.DUALCAM_PHOTO_FRONT);
                 device_info.setExtension(".jpeg");
                 device_info.setCameraType(CAMERA_TYPE.DUALCAM)
                 file_available = true;
+                camera_direction = 'photo_front';
             }
             if (file_available == true) {
                 dbg.logAndPrint("Got DualCam file path.");
@@ -762,15 +766,20 @@ exports.run_fsm = function (current_state, connection, cmd_id, data_buffer, devi
         let is_root_dir_in_file = device_info.getDeviceDirectory().indexOf('/') === 0;
         let root_exec_file = is_root_dir_in_file ? "." : "./";
         dbg.logAndPrint(`is_root_dir_in_file: [[${is_root_dir_in_file}]]`)
-        fs.appendFile(root_exec_file + device_info.getDeviceDirectory() + '/' + device_info.getCurrentFilename() + device_info.getExtension(), temp_file_buff, function (err) {
+        const extra_name = `_${camera_direction}`;
+        let file_buffer = root_exec_file + device_info.getDeviceDirectory() + '/' + device_info.getCurrentFilename() + extra_name + device_info.getExtension();
+        fs.appendFile(file_buffer, temp_file_buff, function (err) {
             temp_file_buff = Buffer.alloc(0);
-            if (err) return dbg.error(err);
-            dbg.logAndPrint("Data written to file " + device_info.getCurrentFilename() + " successfully");
+            if (err){
+                return dbg.error(err, 'file_buffer: [[', file_buffer, ']]');
+            } else {
+                dbg.logAndPrint("Data written to file " + device_info.getCurrentFilename() + " successfully");
+            }
         });
 
         if (device_info.getCameraType() == CAMERA_TYPE.DUALCAM) {
             if (device_info.getFileToDL().search("video") > -1) {
-                ConvertVideoFile(device_info.getDeviceDirectory(), device_info.getCurrentFilename(), device_info.getExtension(), metadata, metadata_option);
+                ConvertVideoFile(device_info.getDeviceDirectory(), device_info.getCurrentFilename() + extra_name, device_info.getExtension(), metadata, metadata_option);
             }
         }
 
