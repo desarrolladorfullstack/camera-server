@@ -7,6 +7,7 @@
 # 2.2 remove docker media files
 # 3. remove copied media files on host
 HOST_FOLDER='/home/ubuntu/'
+BK_FOLDER="bk/dualcam/"
 if [[ "$4" != "" ]]
 then
     HOST_FOLDER=$4
@@ -37,20 +38,32 @@ fi
 # BEGIN: docker cp downloads script
 # sudo docker cp $DOCKER_NAME":/"$DOWNLOADS_FOLDER $HOST_FOLDER
 # END: docker cp downloads script
-echo "=== copying from Docker ==="
 # date
 echo "> Docker Media Files ($DOCKER_MEDIA_FOLDER):"
-docker exec "$DOCKER_NAME" bash -c "ls -tl $DOCKER_MEDIA_FOLDER"
-docker cp "$DOCKER_NAME:$DOCKER_MEDIA_FOLDER." "$HOST_MEDIA_FOLDER"
+total_docker_media=$(docker exec "$DOCKER_NAME" bash -c "find $DOCKER_MEDIA_FOLDER -type f -regex '.*\(.jpeg\|.h265\)$'")
+echo "$total_docker_media"
+if [[ "$total_docker_media" != "total 0" ]] && [[ "$total_docker_media" != "" ]]
+then
+  echo "=== copying from Docker ==="
+  docker cp "$DOCKER_NAME:$DOCKER_MEDIA_FOLDER." "$HOST_MEDIA_FOLDER"
+fi
 # &
 # sudo docker cp $DOCKER_NAME":"$DOCKER_MEDIA_FOLDER$DOWNLOADS_FOLDER $HOST_FOLDER
 #echo "${DOCKER_NAME} , ${DOCKER_MEDIA_FOLDER} , ${HOST_MEDIA_FOLDER}"
 echo "> Media Files ($HOST_MEDIA_FOLDER):"
 # sleep 5
-ls -tl "$HOST_MEDIA_FOLDER"
+total_host_media=$(find "$HOST_MEDIA_FOLDER" -type f)
+echo "$total_host_media"
 # date
-echo "=== executing script ==="
-bash "$HOST_FOLDER$SCRIPT_NAME" "$HOST_MEDIA_FOLDER" "$HOST_FOLDER" "${HOST_FOLDER}bk/" 2>> $HOST_FOLDER"logs/records_flush_"$(date "+%Y-%m-%d_%H")".error" >> $HOST_FOLDER"logs/records_flush_"$(date "+%Y-%m-%d_%H")".log"
+if [[ "$total_host_media" != "total 0" ]] && [[ "$total_host_media" != "" ]]
+then
+  echo "=== executing script ==="
+  bash "$HOST_FOLDER$SCRIPT_NAME" "$HOST_MEDIA_FOLDER" "$HOST_FOLDER" "${HOST_FOLDER}${BK_FOLDER}" 2>> $HOST_FOLDER"logs/records_flush_"$(date "+%Y-%m-%d_%H")".error" >> $HOST_FOLDER"logs/records_flush_"$(date "+%Y-%m-%d_%H")".log"
+fi
 #sleep 3
-# sudo docker exec $DOCKER_NAME bash -c "rm -Rf ${DOCKER_MEDIA_FOLDER}*"
+if [[ "$total_docker_media" != "total 0" ]] && [[ "$total_docker_media" != "" ]]
+then
+  echo "=== RM: Docker Media Files ==="
+  sudo docker exec $DOCKER_NAME bash -c "rm -Rf ${DOCKER_MEDIA_FOLDER}*"
+fi
 # sudo rm -Rf ${HOST_MEDIA_FOLDER}*

@@ -5,7 +5,8 @@
 # 2. loop file contents
 # 3. connect to datasource
 # 4. SQL insert content as hex block per block
-BYTEBLOCK_LIMIT=1024
+BYTE_BLOCK_LIMIT=1024
+LINE_BYTES_SIZE=32
 MEDIA_FOLDER="/home/ubuntu/media/"
 if [[ "$1" != "" ]]
 then
@@ -39,9 +40,10 @@ TEMP_INSERT_FILE="temp_insert.sql"
 TEMP_SELECT_FILE="temp_select.sql"
 TEMP_SELECT_RESULT="temp_select_result.tmp"
 {
-  list_media_files=($(find "$MEDIA_FOLDER" -name *".h265"))
-  echo "=== SCANNING MEDIA FILES ==="
-  echo ${list_media_files[*]}
+  list_media_files=($(find "$MEDIA_FOLDER" -type f -regex '.*\(.jpeg\|.h265\)$'))
+  records_timestamp=$(date +'%Y-%m-%d %H:%M:%S')
+  echo "=== SCANNING MEDIA FILES ($records_timestamp) ==="
+  echo "${list_media_files[*]}"
 } || {
   echo "Error! on list_media_files $MEDIA_FOLDER"
   exit
@@ -70,18 +72,19 @@ do
             continue
         fi
         line_offset=0
-        record_offset=0
+        # record_offset=0
         IFS='/' read -ra file_name_split <<< "$file"
         device_id='00030efafb4bd16a7c000400'
         timestamp=$(date '+%s')"000"
         orientation='undefined'
         if [[ "$file" != "file_raw" ]]
         then
-            echo "file_name_split: "${file_name_split[*]}
+            echo "file_name_split: ${file_name_split[*]}"
             {
               device_index=$((-2))
               device_id=${file_name_split[device_index]}
             }||{
+              echo "ERROR in (file::device_id): ${file_name_split[*]}"
               device_id='00030efafb4bd16a7c000400'
             }
             {
@@ -94,6 +97,7 @@ do
               timestamp=${file_name_split_timestamp[timestamp_index]}
               timestamp=$(date -d "${timestamp:0:10} ${timestamp:10:2}:${timestamp:12:2}:${timestamp:14:2}" '+%s')
             } || {
+              echo "ERROR in (file::timestamp) : ${file_name_split[*]}"
               timestamp=$(date '+%s')"000"
             }
             if [[ "$timestamp" == "" ]]
@@ -121,20 +125,27 @@ do
         #mime_type="${mime_type[1]}"
         # END: validate mime-type
         mime_type="image/jpeg"
-        if [[ "$file" == *"_video"* ]]
+        if [[ "$file" == *"_video"* ]] || [[ "$file" == *".h265"* ]]
         then
           mime_type="application/octet-stream"
           echo ".... $file is a video ...."
-        elif [[ "$file" == *"_image"* ]]
+        elif [[ "$file" == *"_image"* ]] || [[ "$file" == *".jpeg"* ]]
         then
           echo ".... $file is an image ...."
         fi
         # BEGIN: validate temp_file
-        echo "SELECT * FROM $PGSQL_TABLE_PARENT_NAME WHERE temp_file = '$file' AND mime_type like '$mime_type';" > $SQL_FOLDER$TEMP_SELECT_FILE
+        sql_select_temp_where="WHERE temp_file = '$file' AND mime_type like '$mime_type'"
+        sql_select_temp="SELECT * FROM $PGSQL_TABLE_PARENT_NAME $sql_select_temp_where;"
+        echo "$sql_select_temp" > "$SQL_FOLDER$TEMP_SELECT_FILE"
         echo "=== SCANNING $TEMP_INSERT_FILE ==="
-        cat $SQL_FOLDER$TEMP_INSERT_FILE
+        temp_select_file_cat=$(cat "$SQL_FOLDER$TEMP_INSERT_FILE")
+        echo "$temp_select_file_cat"
         #cat $SQL_FOLDER$TEMP_SELECT_FILE >> $SQL_FOLDER"inserts_records.sql"
-        psql -h $PGSQL_HOST -U $PGSQL_USER -d $PGSQL_DBNAME -p $PGSQL_PORT -f $SQL_FOLDER$TEMP_SELECT_FILE > $SQL_FOLDER$TEMP_SELECT_RESULT
+        {
+          psql -h $PGSQL_HOST -U $PGSQL_USER -d $PGSQL_DBNAME -p $PGSQL_PORT -f "$SQL_FOLDER$TEMP_SELECT_FILE" > "$SQL_FOLDER$TEMP_SELECT_RESULT"
+        } || {
+          echo "[p]SQL ERROR: (SELECT $PGSQL_TABLE_PARENT_NAME ...) >> $temp_select_file_cat"
+        }
         result=""; while read -r line; do result="$result$line;"; done < $SQL_FOLDER$TEMP_SELECT_RESULT
         if [[ "$result" != *"(0 rows)"* ]]
         then
@@ -153,65 +164,93 @@ do
           done
         fi
         # END: validate temp_file
-        echo "()=>$input [$device_id, $timestamp,$mime_type,$file,$orientation] reading ... \n"
+        echo "()=>$input [$device_id, $timestamp,$mime_type,$file,$orientation] reading ..."
+        echo ""
         if [[ "$file_key" == "" ]] || [[ "$file_key" == "sq1.last_value" ]]
         then
           # /1000
-          echo "INSERT INTO $PGSQL_TABLE_PARENT_NAME ($PGSQL_PARENT_COLUMN) VALUES ('$device_id', to_timestamp($timestamp),'$mime_type','$file','$orientation');" > $SQL_FOLDER$TEMP_INSERT_FILE
+          sql_insert_file="INSERT INTO $PGSQL_TABLE_PARENT_NAME ($PGSQL_PARENT_COLUMN)"
+          format_timestamp="to_timestamp($timestamp)"
+          table_file_values="'$device_id', $format_timestamp, '$mime_type', '$file', '$orientation'"
+          sql_insert_file="$sql_insert_file VALUES ($table_file_values);"
+          echo "$sql_insert_file" > "$SQL_FOLDER$TEMP_INSERT_FILE"
           echo "=== CHECK $TEMP_INSERT_FILE ==="
-          cat $SQL_FOLDER$TEMP_INSERT_FILE
-          cat $SQL_FOLDER$TEMP_INSERT_FILE >> $SQL_FOLDER"inserts_records.sql"
-          psql -h $PGSQL_HOST -U $PGSQL_USER -d $PGSQL_DBNAME -p $PGSQL_PORT -f $SQL_FOLDER$TEMP_INSERT_FILE
+          temp_insert_file_cat=$(cat "$SQL_FOLDER$TEMP_INSERT_FILE")
+          echo "$temp_insert_file_cat"
+          cat "$SQL_FOLDER$TEMP_INSERT_FILE" >> "${SQL_FOLDER}inserts_records.sql"
+          {
+            psql -h $PGSQL_HOST -U $PGSQL_USER -d $PGSQL_DBNAME -p $PGSQL_PORT -f "$SQL_FOLDER$TEMP_INSERT_FILE"
+          } || {
+            echo "[p]SQL ERROR: (INSERT INTO $PGSQL_TABLE_PARENT_NAME ...) >> $temp_insert_file_cat"
+          }
         else
           echo "validate temp_file: ${results[*]}"
         fi
         {
             lines_insert=($(xxd -p "$input"))
-            echo "== WARNING: INSERT FROM HEX STRING =="
-            lines_insert=($(cat "$input"))
+            echo "== WARNING: INSERT FROM HEX STRING : ${lines_insert[0]} =="
+            # lines_insert=($(cat "$input"))
             line_count=0
             block=""
-            block_count=32
+            # block_count=32
             declare -a block_inserts
-            lines="";
+            # lines="";
             for line in ${lines_insert[*]}
             do
-              lines="$lines$line"
+#              lines="$lines$line"
+#           done
+#              if ((${#block} < (BYTE_BLOCK_LIMIT*2)))
+#              then
+#                 block="$block$line"
+#                 continue
+#              fi
+              echo ">>> LINE [$line_count] ?? \"$line\""
+              if ((line_count < LINE_BYTES_SIZE))
+              then
+                echo ">>> ADD LINE [$line_count]: \"$line\""
+                block="$block$line"
+                line_count=$((line_count + 1))
+                continue
+              fi
+              block_inserts+=("$block")
+              blocks_size=${#block_inserts}
+              last_block=$((blocks_size - 1))
+              echo "ADD BLOCK: \"${block_inserts[last_block]}\""
+              block="$line"
+              line_count=1
             done
-            #if ((${#block} < ($BYTEBLOCK_LIMIT*2)))
-            #then
-            #    block+=$line
-            #    continue
-            #fi
-            #    if (($line_count < $block_count))
-            #    then
-            #        block="$block$line"
-            #        line_count=$((line_count + 1))
-            #        continue
-            #    fi
-            #    block_inserts+=(\"$block\")
-            #    block=""
-            #    line_count=0
-            #done
-            #if (($line_count < $block_count))
-            #then
-            #    block_inserts+=($block)
-            #fi
-            #for line in ${block_inserts[@]}
-            #do
-            #   block=$line
-            echo "-> ENTIRE MODE: block=\$lines ... lines=\"\$lines\$line\""
-            block=$lines
-            echo "INSERT INTO $PGSQL_TABLE_NAME ($PGSQL_COLUMN) VALUES ('$block', $record_offset);" > $SQL_FOLDER$TEMP_INSERT_FILE
-            echo "INSERT INTO $PGSQL_TABLE_CROSS_NAME ($PGSQL_CROSS_COLUMN) SELECT $file_key, sq2.last_value FROM $PGSQL_TABLE_PARENT_SEQUENCE sq1, $PGSQL_TABLE_SEQUENCE sq2;" >> $SQL_FOLDER$TEMP_INSERT_FILE
-            echo "=== CHECK $TEMP_INSERT_FILE (2) ==="
-            cat $SQL_FOLDER$TEMP_INSERT_FILE
-            #cat $SQL_FOLDER$TEMP_INSERT_FILE >> $SQL_FOLDER"inserts_records.sql"
-            psql -h $PGSQL_HOST -U $PGSQL_USER -d $PGSQL_DBNAME -p $PGSQL_PORT -f $SQL_FOLDER$TEMP_INSERT_FILE
-            line_offset=$((line_offset + 1))
-            block=""
-            line_count=0
-            #done
+            if ((line_count < LINE_BYTES_SIZE)) && ((line_count > 0))
+            then
+                block_inserts+=("$block")
+            fi
+            record_offset=0
+            for line in ${block_inserts[*]}
+            do
+              block=$line
+              echo "-> ENTIRE MODE: block=\"$block\" offset=$record_offset"
+              # "... lines=\"\$lines\$line\""
+              # block=$lines
+              sql_insert_block="INSERT INTO $PGSQL_TABLE_NAME ($PGSQL_COLUMN) VALUES ('$block', $record_offset);"
+              echo "$sql_insert_block" > "$SQL_FOLDER$TEMP_INSERT_FILE"
+              sql_select_cross="SELECT $file_key, sq2.last_value"
+              sql_select_cross="$sql_select_cross FROM $PGSQL_TABLE_PARENT_SEQUENCE sq1, $PGSQL_TABLE_SEQUENCE sq2;"
+              sql_insert_cross="INSERT INTO $PGSQL_TABLE_CROSS_NAME ($PGSQL_CROSS_COLUMN) $sql_select_cross"
+              echo "$sql_insert_cross" >> "$SQL_FOLDER$TEMP_INSERT_FILE"
+              echo "=== CHECK $TEMP_INSERT_FILE (2) ==="
+              # cat $SQL_FOLDER$TEMP_INSERT_FILE
+              temp_insert_file_cat=$(cat "$SQL_FOLDER$TEMP_INSERT_FILE")
+              echo "$temp_insert_file_cat"
+              #cat $SQL_FOLDER$TEMP_INSERT_FILE >> $SQL_FOLDER"inserts_records.sql"
+              {
+                psql -h $PGSQL_HOST -U $PGSQL_USER -d $PGSQL_DBNAME -p $PGSQL_PORT -f $SQL_FOLDER$TEMP_INSERT_FILE
+              } || {
+                echo "[p]SQL ERROR: (INSERT INTO $PGSQL_TABLE_NAME || $PGSQL_TABLE_CROSS_NAME ...)"
+                echo " >> $temp_insert_file_cat"
+              }
+              record_offset=$((record_offset + 1))
+              block=""
+              # line_count=0
+            done
             if test -f "$input"
             then
                 echo "$input exists for RM."
@@ -221,15 +260,17 @@ do
                 continue
             fi
         } || {
-            echo "Error! on Subprocess $input:$line_offset\n"
+            echo "Error! on Subprocess [block_inserts] $input:$record_offset"
+            echo ""
         }
     } || {
-      echo "Error! on Process $input\n"
+      echo "Error! on Process $input"
+      echo ""
     }
 done
 echo "LIST $BACKUP_FOLDER"
-ls -tl $BACKUP_FOLDER
-sudo cp -r $MEDIA_FOLDER $BACKUP_FOLDER
+ls -tl "$BACKUP_FOLDER"
+sudo cp -r "$MEDIA_FOLDER" "$BACKUP_FOLDER"
 echo "LIST ${BACKUP_FOLDER}media"
-ls -tl $BACKUP_FOLDER"media"
+ls -tl "${BACKUP_FOLDER}media"
 sudo rm -Rf ${MEDIA_FOLDER}*

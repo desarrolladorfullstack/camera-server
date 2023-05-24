@@ -25,7 +25,8 @@ SELECT r.record_id , r.record_stamp, LENGTH(r.content_block)/2 size
 FROM records r;
 
 -- load image
-SELECT f.*, ARRAY_TO_STRING(ARRAY_AGG(convert_from(r.content_block, 'UTF8') ORDER BY x.record_key),'') as content FROM records r
+SELECT f.*, ARRAY_TO_STRING(ARRAY_AGG(convert_from(r.content_block, 'UTF8')
+        ORDER BY x.record_key),'') as content FROM records r
     INNER JOIN file_records x ON r.record_id = x.record_key
     INNER JOIN files f ON f.file_id = x.file_key
     AND f.mime_type like '%image/jpeg%'
@@ -34,7 +35,8 @@ GROUP BY f.file_id
 ORDER BY f.file_id DESC;
 
 -- load video
-SELECT f.*, ARRAY_TO_STRING(ARRAY_AGG(convert_from(r.content_block, 'UTF8') ORDER BY r.record_stamp),'') as content FROM records r
+SELECT f.*, ARRAY_TO_STRING(ARRAY_AGG(convert_from(r.content_block, 'UTF8')
+        ORDER BY r.record_offset),'') as content FROM records r
     INNER JOIN file_records x ON r.record_id = x.record_key
     INNER JOIN files f ON f.file_id = x.file_key
     AND f.mime_type like '%application/octet-stream%'
@@ -44,4 +46,4 @@ ORDER BY f.file_id DESC;
 
 
 SELECT x.*, LENGTH(r.content_block) size 
-FROM file_records x, records r WHERE r.record_id = x.record_key AND x.file_key = 6715;
+FROM file_records x, records r WHERE r.record_id = x.record_key AND x.file_key = 8177;
