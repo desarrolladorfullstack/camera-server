@@ -5,6 +5,7 @@
 # 2. loop file contents
 # 3. connect to datasource
 # 4. SQL insert content as hex block per block
+TIMEZONE_LOCAL="America/Bogota"
 BYTE_BLOCK_LIMIT=1024
 LINE_BYTES_SIZE=32
 MEDIA_FOLDER="/home/ubuntu/media/"
@@ -95,14 +96,15 @@ do
               IFS='_' read -ra file_name_split_timestamp <<< "$file_split_timestamp"
               timestamp_index=$((-3))
               timestamp=${file_name_split_timestamp[timestamp_index]}
-              timestamp=$(date -d "${timestamp:0:10} ${timestamp:10:2}:${timestamp:12:2}:${timestamp:14:2}" '+%s')
+              datetime_format="${timestamp:0:10} ${timestamp:10:2}:${timestamp:12:2}:${timestamp:14:2}"
+              timestamp=$(env TZ="${TIMEZONE_LOCAL}" date -d "${datetime_format} UTC" '+%s')
             } || {
               echo "ERROR in (file::timestamp) : ${file_name_split[*]}"
-              timestamp=$(date '+%s')"000"
+              timestamp=$(env TZ="${TIMEZONE_LOCAL}" date '+%s')"000"
             }
             if [[ "$timestamp" == "" ]]
             then
-              timestamp=$(date '+%s')"000"
+              timestamp=$(env TZ="${TIMEZONE_LOCAL}" date '+%s')"000"
             fi
             {
               if [[ "$file" == *"_front"* ]]
@@ -125,11 +127,11 @@ do
         #mime_type="${mime_type[1]}"
         # END: validate mime-type
         mime_type="image/jpeg"
-        if [[ "$file" == *"_video"* ]] || [[ "$file" == *".h265"* ]]
+        if [[ "$file" == *"_video"* ]] || [[ "$file" == *".h265" ]]
         then
           mime_type="application/octet-stream"
           echo ".... $file is a video ...."
-        elif [[ "$file" == *"_image"* ]] || [[ "$file" == *".jpeg"* ]]
+        elif [[ "$file" == *"_image"* ]] || [[ "$file" == *".jpeg" ]]
         then
           echo ".... $file is an image ...."
         fi
