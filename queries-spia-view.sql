@@ -44,6 +44,16 @@ SELECT f.*, ARRAY_TO_STRING(ARRAY_AGG(convert_from(r.content_block, 'UTF8')
 GROUP BY f.file_id
 ORDER BY f.file_id DESC;
 
-
+-- records & size
 SELECT x.*, LENGTH(r.content_block) size 
 FROM file_records x, records r WHERE r.record_id = x.record_key AND x.file_key = 8177;
+
+-- props name
+SELECT convert_from(event_key, 'utf8') evt,  convert_from(property_value, 'utf8') prop, property_id
+     -- , *
+FROM properties;
+
+-- events (_id: hex)
+SELECT encode(event_id, 'hex')::text evt, event_name
+     -- , *
+FROM events;
