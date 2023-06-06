@@ -21,3 +21,15 @@ comment on column code_names.code_key is 'codes->codes_pk(foreign code_id)';
 comment on column code_names.code_name_status is '1 activated (...)';
 create unique index code_names_code_name_uindex
     on code_names (code_name);
+
+create table code_values
+(
+    value_id             bytea   not null,
+    code_key             bytea   not null,
+    value_name           varchar not null,
+    country_language_iso varchar default 'en-US',
+    code_value_status    integer default 1
+);
+
+create unique index code_values_value_name_uindex
+    on code_values (value_name);
