@@ -25,3 +25,14 @@ FROM properties;
 
 SELECT encode(event_id, 'hex')::text evt, *
 FROM events;
+
+UPDATE events SET event_id = decode(replace(upper(encode(event_id,'hex')), 'EFBBBF', ''),'hex')
+WHERE encode(event_id,'hex') ILIKE 'EFBBBF%';
+
+UPDATE properties
+SET property_value = decode(replace(upper(encode(property_value,'hex')), 'EFBBBF', ''),'hex')
+WHERE encode(property_value,'hex') ILIKE 'EFBBBF%';
+
+UPDATE properties
+SET event_key = decode(replace(upper(encode(event_key,'hex')), 'EFBBBF', ''),'hex')
+WHERE encode(event_key,'hex') ILIKE 'EFBBBF%';

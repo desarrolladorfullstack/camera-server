@@ -28,3 +28,57 @@ INNER JOIN device_properties dp ON p.property_id = dp.property_key
     AND dp.property_stamp BETWEEN ? AND ?
 INNER JOIN device d ON dp.device_key = d.device_id
     AND d.device_id IN (?);
+
+SELECT concat('{', string_agg(
+    concat('"', convert_from(event_key, 'utf8'), '": "', convert_from(p.property_value, 'utf8'), '"')
+    , ',' order by dp.property_stamp), '}' )::json  prop_json
+    /*, convert_from(event_key, 'utf8') evt,  convert_from(property_value, 'utf8') prop*/
+     /*, concat(encode(event_key, 'hex'), chr(9), encode(property_value, 'hex')) prop_bin*/
+    /*,  encode(event_key, 'hex') evt_hex, encode(property_value, 'hex') prop_hex*/
+     /*, event_key, property_value*/
+    /* ,  * */
+    /* , property_id _id*/
+FROM properties p
+         INNER JOIN device_properties dp ON p.property_id = dp.property_key
+    AND dp.property_stamp BETWEEN ? AND ?
+         INNER JOIN device d ON dp.device_key = d.device_id
+    AND d.device_id IN (?)
+GROUP BY dp.property_stamp;
+
+SELECT concat('[', string_agg(prop_json, ', '), ']')::json prop_array
+FROM (SELECT concat('{"', dp.property_stamp,'":','{', string_agg(
+        concat('"', convert_from(event_key, 'utf8'), '": "', convert_from(p.property_value, 'utf8'), '"')
+    , ',' order by dp.property_stamp), '}}' )/*::json*/ prop_json
+          /*, convert_from(event_key, 'utf8') evt,  convert_from(property_value, 'utf8') prop*/
+          /*, concat(encode(event_key, 'hex'), chr(9), encode(property_value, 'hex')) prop_bin*/
+          /*,  encode(event_key, 'hex') evt_hex, encode(property_value, 'hex') prop_hex*/
+          /*, event_key, property_value*/
+          /* ,  * */
+          /* , property_id _id*/
+      FROM properties p
+               INNER JOIN device_properties dp ON p.property_id = dp.property_key
+          AND dp.property_stamp BETWEEN ? AND ?
+               INNER JOIN device d ON dp.device_key = d.device_id
+          AND d.device_id IN (?)
+      GROUP BY dp.property_stamp) prop_query;
+
+-- Consulta de propiedades por fecha e imei
+SELECT concat('[', string_agg(prop_json, ', '), ']')::json prop_array
+FROM (SELECT concat(/*'{"', dp.property_stamp,'":',*/
+    '{"timestamp":"', dp.property_stamp,'",', string_agg( concat('"',
+            convert_from(event_key, 'utf8'), '":"', convert_from(p.property_value, 'utf8'),
+            '"') , ',' order by dp.property_stamp), ',"event":"', e.event_name,'"}'/*,'}'*/ )/*::json*/ prop_json
+          /*, convert_from(event_key, 'utf8') evt,  convert_from(property_value, 'utf8') prop*/
+          /*, concat(encode(event_key, 'hex'), chr(9), encode(property_value, 'hex')) prop_bin*/
+          /*,  encode(event_key, 'hex') evt_hex, encode(property_value, 'hex') prop_hex*/
+          /*, event_key, property_value*/
+          /* ,  * */
+          /* , property_id _id*/
+      FROM properties p
+               INNER JOIN device_properties dp ON p.property_id = dp.property_key
+          AND dp.property_stamp BETWEEN ? AND ?
+               INNER JOIN device d ON dp.device_key = d.device_id
+          AND d.device_id IN (?)
+                LEFT JOIN events e ON dp.parent_event = e.event_id
+      GROUP BY dp.property_stamp, e.event_id) prop_query;
+

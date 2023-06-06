@@ -57,3 +57,17 @@ FROM properties;
 SELECT encode(event_id, 'hex')::text evt, event_name
      -- , *
 FROM events;
+
+-- device properties By: timestamp & device_id
+SELECT concat('[', string_agg(prop_json, ', '), ']')::json prop_array
+FROM (SELECT concat(
+    '{"timestamp":"', dp.property_stamp,'",', string_agg( concat('"',
+        convert_from(event_key, 'utf8'), '":"', convert_from(p.property_value, 'utf8'), '"')
+        , ',' order by dp.property_stamp), ',"event":"', e.event_name,'"}' )  prop_json
+      FROM properties p
+               INNER JOIN device_properties dp ON p.property_id = dp.property_key
+          AND dp.property_stamp BETWEEN ? AND ?
+               INNER JOIN device d ON dp.device_key = d.device_id
+          AND d.device_id IN (?)
+               LEFT JOIN events e ON dp.parent_event = e.event_id
+      GROUP BY dp.property_stamp, e.event_id) prop_query;
