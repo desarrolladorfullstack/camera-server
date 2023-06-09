@@ -6,6 +6,7 @@
 # 3. connect to datasource
 # 4. SQL insert content as hex block per block
 TIMEZONE_LOCAL="America/Bogota"
+TZ_FACTOR=$((5 * 60 * 60))
 BYTE_BLOCK_LIMIT=1024
 LINE_BYTES_SIZE=32
 SPIA_DATA_FOLDER="/home/ubuntu/spia/"
@@ -355,7 +356,7 @@ do
                 sql_insert_block_values="VALUES (decode('$prop_key', 'hex'), decode('$prop_value', 'hex'));"
                 sql_insert_block=$(printf "%s\n%s" "$sql_insert_block ($PGSQL_COLUMNS)" "$sql_insert_block_values")
                 printf "%s\n" "$sql_insert_block" > "$SQL_FOLDER$TEMP_INSERT_FILE"
-                format_timestamp="to_timestamp($timestamp)"
+                format_timestamp="to_timestamp($timestamp + $TZ_FACTOR)"
                 sql_select_parent="SELECT '$device_id', $property_key"
                 sql_select_parent_and=", $format_timestamp"
                 sql_select_parent=$(printf "%s\n%s" "$sql_select_parent" "$sql_select_parent_and")

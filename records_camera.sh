@@ -55,7 +55,7 @@ do
     {
         file_key="sq1.last_value"
         # if [[ "$file" != *"_video" ]] && [[ "$file" != *"_image" ]] && [[ "$file" != *".h265" ]]
-        if [[ "$file" != *".h265" ]]
+        if [[ "$file" != *".h265" ]] && [[ "$file" != *".jpeg" ]]
         then
             echo "file rejected: $file"
             continue
@@ -127,11 +127,11 @@ do
         #mime_type="${mime_type[1]}"
         # END: validate mime-type
         mime_type="image/jpeg"
-        if [[ "$file" == *"_video"* ]] || [[ "$file" == *".h265" ]]
+        if [[ "$file" == *".h265" ]] # || [[ "$file" == *"_video"* ]]
         then
           mime_type="application/octet-stream"
           echo ".... $file is a video ...."
-        elif [[ "$file" == *"_image"* ]] || [[ "$file" == *".jpeg" ]]
+        elif [[ "$file" == *".jpeg" ]] # || [[ "$file" == *"_image"* ]]
         then
           echo ".... $file is an image ...."
         fi
@@ -232,11 +232,14 @@ do
               echo "-> ENTIRE MODE: block=\"$block\" offset=$record_offset"
               # "... lines=\"\$lines\$line\""
               # block=$lines
-              sql_insert_block="INSERT INTO $PGSQL_TABLE_NAME ($PGSQL_COLUMN) VALUES ('$block', $record_offset);"
-              echo "$sql_insert_block" > "$SQL_FOLDER$TEMP_INSERT_FILE"
+              sql_insert_block="INSERT INTO $PGSQL_TABLE_NAME ($PGSQL_COLUMN)"
+              sql_insert_block=$(printf "%s\n%s" "$sql_insert_block" "VALUES ('$block', $record_offset);")
+              printf "%s\n" "$sql_insert_block" > "$SQL_FOLDER$TEMP_INSERT_FILE"
               sql_select_cross="SELECT $file_key, sq2.last_value"
-              sql_select_cross="$sql_select_cross FROM $PGSQL_TABLE_PARENT_SEQUENCE sq1, $PGSQL_TABLE_SEQUENCE sq2;"
-              sql_insert_cross="INSERT INTO $PGSQL_TABLE_CROSS_NAME ($PGSQL_CROSS_COLUMN) $sql_select_cross"
+              sql_select_cross_from="FROM $PGSQL_TABLE_PARENT_SEQUENCE sq1, $PGSQL_TABLE_SEQUENCE sq2;"
+              sql_select_cross=$(printf "%s\n%s" "$sql_select_cross" "$sql_select_cross_from")
+              sql_insert_cross="INSERT INTO $PGSQL_TABLE_CROSS_NAME ($PGSQL_CROSS_COLUMN)"
+              sql_insert_cross=$(printf "%s\n%s" "$sql_insert_cross" "$sql_select_cross")
               echo "$sql_insert_cross" >> "$SQL_FOLDER$TEMP_INSERT_FILE"
               echo "=== CHECK $TEMP_INSERT_FILE (2) ==="
               # cat $SQL_FOLDER$TEMP_INSERT_FILE

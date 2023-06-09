@@ -82,9 +82,8 @@ FROM (SELECT concat(/*'{"', dp.property_stamp,'":',*/
                 LEFT JOIN events e ON dp.parent_event = e.event_id
       GROUP BY dp.property_stamp, e.event_id) prop_query;
 
-DELETE FROM device_properties
-WHERE property_stamp >= '2023-06-01';-- '55401-12-10';
-DELETE FROM properties WHERE property_id NOT IN (SELECT property_key FROM device_properties);
+
+
 
 SELECT property_id FROM properties WHERE
         event_key = decode('6576656e745f6964', 'hex')
@@ -108,7 +107,9 @@ SELECT '860896050794858', sq.last_value,
 FROM properties_property_id_seq sq;
 
 SELECT p.property_id, EXTRACT(EPOCH FROM dp.property_stamp::timestamp),
-       EXTRACT(EPOCH FROM dp.property_stamp::timestamp) + 18000
+       EXTRACT(EPOCH FROM dp.property_stamp::timestamp) + 18000,
+       dp.property_stamp,
+       to_timestamp(EXTRACT(EPOCH FROM dp.property_stamp::timestamp) + 18000)
 FROM properties p
          INNER JOIN device_properties dp
                     ON dp.device_key IN ('860896050794858')
