@@ -274,7 +274,9 @@ do
 #              echo "psql -h $PGSQL_HOST -U $PGSQL_USER -d $PGSQL_DBNAME -p $PGSQL_PORT -f $SQL_FOLDER$TEMP_SELECT_FILE > $SQL_FOLDER$TEMP_SELECT_RESULT"
               {
                 psql -h $PGSQL_HOST -U $PGSQL_USER -d $PGSQL_DBNAME -p $PGSQL_PORT -f "$SQL_FOLDER$TEMP_SELECT_FILE" > "$SQL_FOLDER$TEMP_SELECT_RESULT"
-                printf "%s\n%s" "== $SQL_FOLDER$TEMP_SELECT_FILE ==" "{$(cat "$SQL_FOLDER$TEMP_SELECT_RESULT")}"
+                temp_psql_result=$(cat "$SQL_FOLDER$TEMP_SELECT_RESULT")
+                temp_psql_result_rows=${#temp_psql_result}
+                printf "%s\n%s\n" "== $SQL_FOLDER$TEMP_SELECT_FILE ==" "total: $temp_psql_result_rows"
               } || {
                 echo "[p]SQL ERROR: (SELECT $PGSQL_TABLE_NAME ... validate) >> $temp_select_file_cat"
               }
@@ -323,7 +325,9 @@ do
 #              echo "psql -h $PGSQL_HOST -U $PGSQL_USER -d $PGSQL_DBNAME -p $PGSQL_PORT -f $SQL_FOLDER$TEMP_SELECT_FILE > $SQL_FOLDER$TEMP_SELECT_RESULT"
               {
                 psql -h $PGSQL_HOST -U $PGSQL_USER -d $PGSQL_DBNAME -p $PGSQL_PORT -f "$SQL_FOLDER$TEMP_SELECT_FILE" > "$SQL_FOLDER$TEMP_SELECT_RESULT"
-                printf "%s\n%s" "== $SQL_FOLDER$TEMP_SELECT_FILE ==" "{$(cat "$SQL_FOLDER$TEMP_SELECT_RESULT")}"
+                temp_psql_result=$(cat "$SQL_FOLDER$TEMP_SELECT_RESULT")
+                temp_psql_result_rows=${#temp_psql_result}
+                printf "%s\n%s\n" "== $SQL_FOLDER$TEMP_SELECT_FILE ==" "total: $temp_psql_result_rows"
               } || {
                 echo "[p]SQL ERROR: (SELECT $PGSQL_TABLE_PARENT_NAME ... validate) >> $temp_select_file_cat"
               }
