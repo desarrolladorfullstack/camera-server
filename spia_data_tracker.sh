@@ -137,7 +137,9 @@ do
         sql_select_temp_where="WHERE EXTRACT(EPOCH FROM property_stamp::timestamp) = $timestamp"
         sql_select_temp_where_and="AND parent_event IN (decode('$parent_event', 'hex'))"
         sql_select_temp_where=$(printf "%s\n%s" "$sql_select_temp_where" "$sql_select_temp_where_and")
-        sql_select_temp="SELECT * FROM $PGSQL_TABLE_PARENT_NAME"
+        sql_select_temp="SELECT COUNT(*) AS num_properties"
+        sql_select_from="FROM $PGSQL_TABLE_PARENT_NAME"
+        sql_select_temp=$(printf "%s\n%s" "$sql_select_temp" "$sql_select_from")
         sql_select_temp=$(printf "%s\n%s" "$sql_select_temp" "$sql_select_temp_where;")
         echo "$sql_select_temp" > "$SQL_FOLDER$TEMP_SELECT_FILE"
         echo "=== SCANNING $TEMP_INSERT_FILE ==="
@@ -151,6 +153,7 @@ do
         } || {
           echo "[p]SQL ERROR: (SELECT $PGSQL_TABLE_PARENT_NAME ...) >> $temp_select_file_cat"
         }
+        echo "$temp_select_file_cat" > "query_select_spia.sql"
         result=""; while read -r line; do result="$result$line;"; done < $SQL_FOLDER$TEMP_SELECT_RESULT
         if [[ "$result" != *"(0 rows)"* ]]
         then
@@ -264,7 +267,9 @@ do
               sql_select_temp_where="WHERE event_key = decode('$prop_key', 'hex')"
               sql_select_temp_where_and="AND property_value = decode('$prop_value', 'hex')"
               sql_select_temp_where=$(printf "%s\n%s" "$sql_select_temp_where" "$sql_select_temp_where_and")
-              sql_select_temp="SELECT property_id FROM $PGSQL_TABLE_NAME"
+              sql_select_temp="SELECT MAX(property_id) AS property_id"
+              sql_select_from="FROM $PGSQL_TABLE_NAME"
+              sql_select_temp=$(printf "%s\n%s" "$sql_select_temp" "$sql_select_from")
               sql_select_temp=$(printf "%s\n%s" "$sql_select_temp" "$sql_select_temp_where;")
               echo "$sql_select_temp" > "$SQL_FOLDER$TEMP_SELECT_FILE"
 #              echo "=== SCANNING $TEMP_INSERT_FILE ==="
@@ -280,6 +285,7 @@ do
               } || {
                 echo "[p]SQL ERROR: (SELECT $PGSQL_TABLE_NAME ... validate) >> $temp_select_file_cat"
               }
+              echo "$temp_select_file_cat" >> "query_select_spia.sql"
               result=""; while read -r line; do result="$result$line;"; done < $SQL_FOLDER$TEMP_SELECT_RESULT
               if [[ "$result" != *"(0 rows)"* ]]
               then
@@ -314,8 +320,10 @@ do
               sql_select_temp_where_and="AND p.property_value = decode('$prop_value', 'hex')"
               sql_select_temp_where=$(printf "%s\n%s" "$sql_select_temp_where" "$sql_select_temp_where_and")
               sql_select_temp_where=$(printf "%s\n%s" "$sql_select_temp_join" "$sql_select_temp_where")
-              sql_select_fields="p.property_id, EXTRACT(EPOCH FROM dp.property_stamp::timestamp)"
-              sql_select_temp="SELECT $sql_select_fields FROM $PGSQL_TABLE_NAME p"
+              sql_select_fields="MAX(p.property_id) AS property_id"
+              sql_select_fields_stamp="EXTRACT(EPOCH FROM dp.property_stamp::timestamp)"
+              sql_select_from="FROM $PGSQL_TABLE_NAME p"
+              sql_select_temp=$(printf "%s\n%s" "SELECT $sql_select_fields" "$sql_select_from")
               sql_select_temp=$(printf "%s\n%s" "$sql_select_temp" "$sql_select_temp_where;")
               echo "$sql_select_temp" > "$SQL_FOLDER$TEMP_SELECT_FILE"
               echo "=== SCANNING $TEMP_SELECT_FILE ==="
@@ -331,6 +339,7 @@ do
               } || {
                 echo "[p]SQL ERROR: (SELECT $PGSQL_TABLE_PARENT_NAME ... validate) >> $temp_select_file_cat"
               }
+              echo "$temp_select_file_cat" >> "query_select_spia.sql"
               result=""; while read -r line; do result="$result$line;"; done < $SQL_FOLDER$TEMP_SELECT_RESULT
               if [[ "$result" != *"(0 rows)"* ]]
               then
@@ -409,6 +418,6 @@ done
 echo "LIST $BACKUP_FOLDER"
 ls -tl "$BACKUP_FOLDER"
 sudo cp -r "$SPIA_DATA_FOLDER" "$BACKUP_FOLDER"
-echo "LIST ${BACKUP_FOLDER}data"
-ls -tl "${BACKUP_FOLDER}data"
+echo "LIST ${BACKUP_FOLDER}"
+ls -tl "${BACKUP_FOLDER}"
 sudo rm -Rf ${SPIA_DATA_FOLDER}*

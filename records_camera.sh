@@ -136,8 +136,13 @@ do
           echo ".... $file is an image ...."
         fi
         # BEGIN: validate temp_file
-        sql_select_temp_where="WHERE temp_file = '$file' AND mime_type like '$mime_type'"
-        sql_select_temp="SELECT * FROM $PGSQL_TABLE_PARENT_NAME $sql_select_temp_where;"
+        sql_select_temp_where="WHERE temp_file = '$file'"
+        sql_select_temp_where_and="AND mime_type LIKE '$mime_type'"
+        sql_select_temp_where=$(printf "%s\n%s" "$sql_select_temp_where" "$sql_select_temp_where_and")
+        sql_select_temp="SELECT COUNT(*) AS num_files"
+        sql_select_from="FROM $PGSQL_TABLE_PARENT_NAME"
+        sql_select_temp=$(printf "%s\n%s" "$sql_select_temp" "$sql_select_from")
+        sql_select_temp=$(printf "%s\n%s" "$sql_select_temp" "$sql_select_temp_where;")
         echo "$sql_select_temp" > "$SQL_FOLDER$TEMP_SELECT_FILE"
         echo "=== SCANNING $TEMP_INSERT_FILE ==="
         temp_select_file_cat=$(cat "$SQL_FOLDER$TEMP_INSERT_FILE")

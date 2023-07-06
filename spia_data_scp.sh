@@ -7,7 +7,7 @@
 # 2.2 remove docker data files
 # 3. remove copied data files on host
 HOST_FOLDER='/home/ubuntu/'
-BK_FOLDER="bk/dualcam/"
+BK_FOLDER="bk/dualcam/data/"
 if [[ "$4" != "" ]]
 then
     HOST_FOLDER=$4
