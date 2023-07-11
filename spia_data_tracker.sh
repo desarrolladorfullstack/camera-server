@@ -153,7 +153,7 @@ do
         } || {
           echo "[p]SQL ERROR: (SELECT $PGSQL_TABLE_PARENT_NAME ...) >> $temp_select_file_cat"
         }
-        echo "$temp_select_file_cat" > "query_select_spia.sql"
+        echo "$temp_select_file_cat" > "${SQL_FOLDER}query_select_spia.sql"
         result=""; while read -r line; do result="$result$line;"; done < $SQL_FOLDER$TEMP_SELECT_RESULT
         if [[ "$result" != *"(0 rows)"* ]]
         then
@@ -285,7 +285,7 @@ do
               } || {
                 echo "[p]SQL ERROR: (SELECT $PGSQL_TABLE_NAME ... validate) >> $temp_select_file_cat"
               }
-              echo "$temp_select_file_cat" >> "query_select_spia.sql"
+              echo "$temp_select_file_cat" >> "${SQL_FOLDER}query_select_spia.sql"
               result=""; while read -r line; do result="$result$line;"; done < $SQL_FOLDER$TEMP_SELECT_RESULT
               if [[ "$result" != *"(0 rows)"* ]]
               then
@@ -339,7 +339,7 @@ do
               } || {
                 echo "[p]SQL ERROR: (SELECT $PGSQL_TABLE_PARENT_NAME ... validate) >> $temp_select_file_cat"
               }
-              echo "$temp_select_file_cat" >> "query_select_spia.sql"
+              echo "$temp_select_file_cat" >> "${SQL_FOLDER}query_select_spia.sql"
               result=""; while read -r line; do result="$result$line;"; done < $SQL_FOLDER$TEMP_SELECT_RESULT
               if [[ "$result" != *"(0 rows)"* ]]
               then
