@@ -132,37 +132,42 @@ do
 #        then
 #          echo ".... $file is an image ...."
 #        fi
+        echo "=== SCANNING $TEMP_INSERT_FILE ==="
+        temp_select_file_cat=$(cat "$SQL_FOLDER$TEMP_INSERT_FILE")
+        echo "$temp_select_file_cat"
         # BEGIN: validate timestamp
         format_timestamp="to_timestamp($timestamp)"
         sql_select_temp_where="WHERE EXTRACT(EPOCH FROM property_stamp::timestamp) = $timestamp"
         sql_select_temp_where_and="AND parent_event IN (decode('$parent_event', 'hex'))"
-        sql_select_temp_where=$(printf "%s\n%s" "$sql_select_temp_where" "$sql_select_temp_where_and")
+        sql_select_temp_where=$(printf "%s \n%s" "$sql_select_temp_where" "$sql_select_temp_where_and")
         sql_select_temp="SELECT COUNT(*) AS num_properties"
         sql_select_from="FROM $PGSQL_TABLE_PARENT_NAME"
-        sql_select_temp=$(printf "%s\n%s" "$sql_select_temp" "$sql_select_from")
-        sql_select_temp=$(printf "%s\n%s" "$sql_select_temp" "$sql_select_temp_where;")
+        sql_select_temp=$(printf "%s \n%s" "$sql_select_temp" "$sql_select_from")
+        sql_select_temp=$(printf "%s \n%s" "$sql_select_temp" "$sql_select_temp_where;")
         echo "$sql_select_temp" > "$SQL_FOLDER$TEMP_SELECT_FILE"
-        echo "=== SCANNING $TEMP_INSERT_FILE ==="
-        temp_select_file_cat=$(cat "$SQL_FOLDER$TEMP_INSERT_FILE")
+        echo "=== SCANNING $TEMP_SELECT_FILE ==="
+        temp_select_file_cat=$(cat "$SQL_FOLDER$TEMP_SELECT_FILE")
         echo "$temp_select_file_cat"
         #cat $SQL_FOLDER$TEMP_SELECT_FILE >> $SQL_FOLDER"inserts_records.sql"
 #        echo "psql -h $PGSQL_HOST -U $PGSQL_USER -d $PGSQL_DBNAME -p $PGSQL_PORT -f $SQL_FOLDER$TEMP_SELECT_FILE > $SQL_FOLDER$TEMP_SELECT_RESULT"
         {
           psql -h $PGSQL_HOST -U $PGSQL_USER -d $PGSQL_DBNAME -p $PGSQL_PORT -f "$SQL_FOLDER$TEMP_SELECT_FILE" > "$SQL_FOLDER$TEMP_SELECT_RESULT"
-          printf "%s\n%s" "== $SQL_FOLDER$TEMP_SELECT_FILE ==" "{$(cat "$SQL_FOLDER$TEMP_SELECT_RESULT")}"
+          printf "%s \n%s" "== $SQL_FOLDER$TEMP_SELECT_FILE ==" "$temp_select_file_cat"
         } || {
           echo "[p]SQL ERROR: (SELECT $PGSQL_TABLE_PARENT_NAME ...) >> $temp_select_file_cat"
         }
         echo "$temp_select_file_cat" > "${SQL_FOLDER}query_select_spia.sql"
         result=""; while read -r line; do result="$result$line;"; done < $SQL_FOLDER$TEMP_SELECT_RESULT
-        if [[ "$result" != *"(0 rows)"* ]]
+        #echo "result trim(): $result"
+        if [[ "$result" != *"(0 rows)"* ]] && [[ "$result" != *";0;(1 row)"* ]] && [[ "$result" != *";;(1 row)"* ]]
         then
           IFS=';' read -ra results <<< "$result"
           end_rows=${#results}
           for (( i = 2; i < end_rows; i++ ))
           do
             IFS=' | ' read -ra row <<< "${results[$i]}"
-            if [[ "${row[0]}" != "" ]]
+            # && [[ "${row[0]}" != "0" ]] && [[ "${row[0]}" != *"(0 rows)"* ]]
+            if [[ "${row[0]}" != "" ]] 
             then
 #              file_id="${row[0]}"
 #              file_key=$file_id
@@ -197,6 +202,7 @@ do
 #        fi
         {
             lines_insert=($(cat "$input"))
+            echo ""
             echo "== WARNING: INSERT FROM HEX STRING : ${lines_insert[*]} =="
             # lines_insert=($(cat "$input"))
             line_count=0
@@ -266,11 +272,11 @@ do
               format_timestamp="to_timestamp($timestamp)"
               sql_select_temp_where="WHERE event_key = decode('$prop_key', 'hex')"
               sql_select_temp_where_and="AND property_value = decode('$prop_value', 'hex')"
-              sql_select_temp_where=$(printf "%s\n%s" "$sql_select_temp_where" "$sql_select_temp_where_and")
+              sql_select_temp_where=$(printf "%s \n%s" "$sql_select_temp_where" "$sql_select_temp_where_and")
               sql_select_temp="SELECT MAX(property_id) AS property_id"
               sql_select_from="FROM $PGSQL_TABLE_NAME"
-              sql_select_temp=$(printf "%s\n%s" "$sql_select_temp" "$sql_select_from")
-              sql_select_temp=$(printf "%s\n%s" "$sql_select_temp" "$sql_select_temp_where;")
+              sql_select_temp=$(printf "%s \n%s" "$sql_select_temp" "$sql_select_from")
+              sql_select_temp=$(printf "%s \n%s" "$sql_select_temp" "$sql_select_temp_where;")
               echo "$sql_select_temp" > "$SQL_FOLDER$TEMP_SELECT_FILE"
 #              echo "=== SCANNING $TEMP_INSERT_FILE ==="
 #              temp_select_file_cat=$(cat "$SQL_FOLDER$TEMP_INSERT_FILE")
@@ -281,13 +287,14 @@ do
                 psql -h $PGSQL_HOST -U $PGSQL_USER -d $PGSQL_DBNAME -p $PGSQL_PORT -f "$SQL_FOLDER$TEMP_SELECT_FILE" > "$SQL_FOLDER$TEMP_SELECT_RESULT"
                 temp_psql_result=$(cat "$SQL_FOLDER$TEMP_SELECT_RESULT")
                 temp_psql_result_rows=${#temp_psql_result}
-                printf "%s\n%s\n" "== $SQL_FOLDER$TEMP_SELECT_FILE ==" "total: $temp_psql_result_rows"
+                printf "%s \n%s\n" "== $SQL_FOLDER$TEMP_SELECT_FILE ==" "total: $temp_psql_result_rows"
               } || {
                 echo "[p]SQL ERROR: (SELECT $PGSQL_TABLE_NAME ... validate) >> $temp_select_file_cat"
               }
               echo "$temp_select_file_cat" >> "${SQL_FOLDER}query_select_spia.sql"
-              result=""; while read -r line; do result="$result$line;"; done < $SQL_FOLDER$TEMP_SELECT_RESULT
-              if [[ "$result" != *"(0 rows)"* ]]
+              result=""; while read -r line; do result="$result$line;"; done < $SQL_FOLDER$TEMP_SELECT_RESULT              
+              # echo "result trim(2): $result"
+              if [[ "$result" != *"(0 rows)"* ]] && [[ "$result" != *";0;(1 row)"* ]] && [[ "$result" != *";;(1 row)"* ]]
               then
                 IFS=';' read -ra results <<< "$result"
                 end_rows=${#results}
@@ -309,22 +316,22 @@ do
               # BEGIN: validate device_property
               format_timestamp="to_timestamp($timestamp)"
               sql_select_temp_join="INNER JOIN $PGSQL_TABLE_PARENT_NAME dp"
-              sql_select_temp_join=$(printf "%s\n%s" "$sql_select_temp_join" "ON dp.device_key IN ('$device_id')")
+              sql_select_temp_join=$(printf "%s \n%s" "$sql_select_temp_join" "ON dp.device_key IN ('$device_id')")
               sql_select_temp_join_and="AND dp.parent_event IN (decode('$parent_event', 'hex'))"
-              sql_select_temp_join=$(printf "%s\n%s" "$sql_select_temp_join" "$sql_select_temp_join_and")
+              sql_select_temp_join=$(printf "%s \n%s" "$sql_select_temp_join" "$sql_select_temp_join_and")
               sql_select_temp_join_and="AND dp.property_key = p.property_id"
-              sql_select_temp_join=$(printf "%s\n%s" "$sql_select_temp_join" "$sql_select_temp_join_and")
+              sql_select_temp_join=$(printf "%s \n%s" "$sql_select_temp_join" "$sql_select_temp_join_and")
               sql_select_temp_join_and="AND EXTRACT(EPOCH FROM dp.property_stamp::timestamp) = $timestamp"
-              sql_select_temp_join=$(printf "%s\n%s" "$sql_select_temp_join" "$sql_select_temp_join_and")
+              sql_select_temp_join=$(printf "%s \n%s" "$sql_select_temp_join" "$sql_select_temp_join_and")
               sql_select_temp_where="WHERE p.event_key = decode('$prop_key', 'hex')"
               sql_select_temp_where_and="AND p.property_value = decode('$prop_value', 'hex')"
-              sql_select_temp_where=$(printf "%s\n%s" "$sql_select_temp_where" "$sql_select_temp_where_and")
-              sql_select_temp_where=$(printf "%s\n%s" "$sql_select_temp_join" "$sql_select_temp_where")
+              sql_select_temp_where=$(printf "%s \n%s" "$sql_select_temp_where" "$sql_select_temp_where_and")
+              sql_select_temp_where=$(printf "%s \n%s" "$sql_select_temp_join" "$sql_select_temp_where")
               sql_select_fields="MAX(p.property_id) AS property_id"
               sql_select_fields_stamp="EXTRACT(EPOCH FROM dp.property_stamp::timestamp)"
               sql_select_from="FROM $PGSQL_TABLE_NAME p"
-              sql_select_temp=$(printf "%s\n%s" "SELECT $sql_select_fields" "$sql_select_from")
-              sql_select_temp=$(printf "%s\n%s" "$sql_select_temp" "$sql_select_temp_where;")
+              sql_select_temp=$(printf "%s \n%s" "SELECT $sql_select_fields" "$sql_select_from")
+              sql_select_temp=$(printf "%s \n%s" "$sql_select_temp" "$sql_select_temp_where;")
               echo "$sql_select_temp" > "$SQL_FOLDER$TEMP_SELECT_FILE"
               echo "=== SCANNING $TEMP_SELECT_FILE ==="
               temp_select_file_cat=$(cat "$SQL_FOLDER$TEMP_SELECT_FILE")
@@ -335,13 +342,14 @@ do
                 psql -h $PGSQL_HOST -U $PGSQL_USER -d $PGSQL_DBNAME -p $PGSQL_PORT -f "$SQL_FOLDER$TEMP_SELECT_FILE" > "$SQL_FOLDER$TEMP_SELECT_RESULT"
                 temp_psql_result=$(cat "$SQL_FOLDER$TEMP_SELECT_RESULT")
                 temp_psql_result_rows=${#temp_psql_result}
-                printf "%s\n%s\n" "== $SQL_FOLDER$TEMP_SELECT_FILE ==" "total: $temp_psql_result_rows"
+                printf "%s \n%s\n" "== $SQL_FOLDER$TEMP_SELECT_FILE ==" "total: $temp_psql_result_rows"
               } || {
                 echo "[p]SQL ERROR: (SELECT $PGSQL_TABLE_PARENT_NAME ... validate) >> $temp_select_file_cat"
               }
               echo "$temp_select_file_cat" >> "${SQL_FOLDER}query_select_spia.sql"
               result=""; while read -r line; do result="$result$line;"; done < $SQL_FOLDER$TEMP_SELECT_RESULT
-              if [[ "$result" != *"(0 rows)"* ]]
+              # echo "result trim(3): $result"
+              if [[ "$result" != *"(0 rows)"* ]] && [[ "$result" != *";0;(1 row)"* ]] && [[ "$result" != *";;(1 row)"* ]]
               then
                 echo "validate device_property (1)"
                 IFS=';' read -ra results <<< "$result"
@@ -367,17 +375,17 @@ do
                 # block=$lines
                 sql_insert_block="INSERT INTO $PGSQL_TABLE_NAME"
                 sql_insert_block_values="VALUES (decode('$prop_key', 'hex'), decode('$prop_value', 'hex'));"
-                sql_insert_block=$(printf "%s\n%s" "$sql_insert_block ($PGSQL_COLUMNS)" "$sql_insert_block_values")
+                sql_insert_block=$(printf "%s \n%s" "$sql_insert_block ($PGSQL_COLUMNS)" "$sql_insert_block_values")
                 printf "%s\n" "$sql_insert_block" > "$SQL_FOLDER$TEMP_INSERT_FILE"
                 format_timestamp="to_timestamp($timestamp + $TZ_FACTOR)"
                 sql_select_parent="SELECT '$device_id', $property_key"
                 sql_select_parent_and=", $format_timestamp"
-                sql_select_parent=$(printf "%s\n%s" "$sql_select_parent" "$sql_select_parent_and")
+                sql_select_parent=$(printf "%s \n%s" "$sql_select_parent" "$sql_select_parent_and")
                 sql_select_parent_and=", decode('$parent_event', 'hex')"
-                sql_select_parent=$(printf "%s\n%s" "$sql_select_parent" "$sql_select_parent_and")
-                sql_select_parent=$(printf "%s\n%s" "$sql_select_parent" "FROM $PGSQL_TABLE_SEQUENCE sq;")
+                sql_select_parent=$(printf "%s \n%s" "$sql_select_parent" "$sql_select_parent_and")
+                sql_select_parent=$(printf "%s \n%s" "$sql_select_parent" "FROM $PGSQL_TABLE_SEQUENCE sq;")
                 sql_insert_cross="INSERT INTO $PGSQL_TABLE_PARENT_NAME ($PGSQL_PARENT_COLUMNS)"
-                sql_insert_cross=$(printf "%s\n%s" "$sql_insert_cross" "$sql_select_parent")
+                sql_insert_cross=$(printf "%s \n%s" "$sql_insert_cross" "$sql_select_parent")
                 echo "$sql_insert_cross" >> "$SQL_FOLDER$TEMP_INSERT_FILE"
                 echo "=== CHECK $TEMP_INSERT_FILE ==="
                 # cat $SQL_FOLDER$TEMP_INSERT_FILE "(2)"

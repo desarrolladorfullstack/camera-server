@@ -135,17 +135,20 @@ do
         then
           echo ".... $file is an image ...."
         fi
+         echo "=== SCANNING $TEMP_INSERT_FILE ==="
+        temp_select_file_cat=$(cat "$SQL_FOLDER$TEMP_INSERT_FILE")
+        echo "$temp_select_file_cat"
         # BEGIN: validate temp_file
         sql_select_temp_where="WHERE temp_file = '$file'"
         sql_select_temp_where_and="AND mime_type LIKE '$mime_type'"
-        sql_select_temp_where=$(printf "%s\n%s" "$sql_select_temp_where" "$sql_select_temp_where_and")
+        sql_select_temp_where=$(printf "%s \n%s" "$sql_select_temp_where" "$sql_select_temp_where_and")
         sql_select_temp="SELECT COUNT(*) AS num_files"
         sql_select_from="FROM $PGSQL_TABLE_PARENT_NAME"
-        sql_select_temp=$(printf "%s\n%s" "$sql_select_temp" "$sql_select_from")
-        sql_select_temp=$(printf "%s\n%s" "$sql_select_temp" "$sql_select_temp_where;")
+        sql_select_temp=$(printf "%s \n%s" "$sql_select_temp" "$sql_select_from")
+        sql_select_temp=$(printf "%s \n%s" "$sql_select_temp" "$sql_select_temp_where;")
         echo "$sql_select_temp" > "$SQL_FOLDER$TEMP_SELECT_FILE"
-        echo "=== SCANNING $TEMP_INSERT_FILE ==="
-        temp_select_file_cat=$(cat "$SQL_FOLDER$TEMP_INSERT_FILE")
+        echo "=== SCANNING $TEMP_SELECT_FILE ==="
+        temp_select_file_cat=$(cat "$SQL_FOLDER$TEMP_SELECT_FILE")
         echo "$temp_select_file_cat"
         #cat $SQL_FOLDER$TEMP_SELECT_FILE >> $SQL_FOLDER"inserts_records.sql"
         {
@@ -154,7 +157,8 @@ do
           echo "[p]SQL ERROR: (SELECT $PGSQL_TABLE_PARENT_NAME ...) >> $temp_select_file_cat"
         }
         result=""; while read -r line; do result="$result$line;"; done < $SQL_FOLDER$TEMP_SELECT_RESULT
-        if [[ "$result" != *"(0 rows)"* ]]
+        echo "result trim(): $result"
+        if [[ "$result" != *"(0 rows)"* ]] && [[ "$result" != *";0;(1 row)"* ]] && [[ "$result" != *";;(1 row)"* ]]
         then
           IFS=';' read -ra results <<< "$result"
           end_rows=${#results}
@@ -238,13 +242,13 @@ do
               # "... lines=\"\$lines\$line\""
               # block=$lines
               sql_insert_block="INSERT INTO $PGSQL_TABLE_NAME ($PGSQL_COLUMN)"
-              sql_insert_block=$(printf "%s\n%s" "$sql_insert_block" "VALUES ('$block', $record_offset);")
+              sql_insert_block=$(printf "%s \n%s" "$sql_insert_block" "VALUES ('$block', $record_offset);")
               printf "%s\n" "$sql_insert_block" > "$SQL_FOLDER$TEMP_INSERT_FILE"
               sql_select_cross="SELECT $file_key, sq2.last_value"
               sql_select_cross_from="FROM $PGSQL_TABLE_PARENT_SEQUENCE sq1, $PGSQL_TABLE_SEQUENCE sq2;"
-              sql_select_cross=$(printf "%s\n%s" "$sql_select_cross" "$sql_select_cross_from")
+              sql_select_cross=$(printf "%s \n%s" "$sql_select_cross" "$sql_select_cross_from")
               sql_insert_cross="INSERT INTO $PGSQL_TABLE_CROSS_NAME ($PGSQL_CROSS_COLUMN)"
-              sql_insert_cross=$(printf "%s\n%s" "$sql_insert_cross" "$sql_select_cross")
+              sql_insert_cross=$(printf "%s \n%s" "$sql_insert_cross" "$sql_select_cross")
               echo "$sql_insert_cross" >> "$SQL_FOLDER$TEMP_INSERT_FILE"
               echo "=== CHECK $TEMP_INSERT_FILE (2) ==="
               # cat $SQL_FOLDER$TEMP_INSERT_FILE
