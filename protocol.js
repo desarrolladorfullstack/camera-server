@@ -544,6 +544,8 @@ function ConvertVideoFile(directory, filename, extension, metadata, metadata_opt
 let sync_received = false;
 
 const media_folder = 'downloads';
+
+let camera_direction = 'video_rear';
 exports.run_fsm = function (current_state, connection, cmd_id, data_buffer, device_info, metadata, progress_bar, camera_option, metadata_option) {
     let file_available = false;
     switch (cmd_id) {
@@ -681,8 +683,6 @@ exports.run_fsm = function (current_state, connection, cmd_id, data_buffer, devi
             break;
         }
     }
-
-    let camera_direction = 'video_rear';
     if (current_state == FSM_STATE.INIT) {
         //Create dir with device IMEI if it doesn't exist
         if (!fs.existsSync(media_folder)) {
