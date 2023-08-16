@@ -151,6 +151,7 @@ do
         temp_select_file_cat=$(cat "$SQL_FOLDER$TEMP_SELECT_FILE")
         echo "$temp_select_file_cat"
         #cat $SQL_FOLDER$TEMP_SELECT_FILE >> $SQL_FOLDER"inserts_records.sql"
+        ### QUERY validate temp_file
         {
           psql -h $PGSQL_HOST -U $PGSQL_USER -d $PGSQL_DBNAME -p $PGSQL_PORT -f "$SQL_FOLDER$TEMP_SELECT_FILE" > "$SQL_FOLDER$TEMP_SELECT_RESULT"
         } || {
@@ -189,6 +190,7 @@ do
           temp_insert_file_cat=$(cat "$SQL_FOLDER$TEMP_INSERT_FILE")
           echo "$temp_insert_file_cat"
           cat "$SQL_FOLDER$TEMP_INSERT_FILE" >> "${SQL_FOLDER}inserts_records.sql"
+          ### QUERY insert
           {
             psql -h $PGSQL_HOST -U $PGSQL_USER -d $PGSQL_DBNAME -p $PGSQL_PORT -f "$SQL_FOLDER$TEMP_INSERT_FILE"
           } || {
@@ -255,6 +257,7 @@ do
               temp_insert_file_cat=$(cat "$SQL_FOLDER$TEMP_INSERT_FILE")
               echo "$temp_insert_file_cat"
               #cat $SQL_FOLDER$TEMP_INSERT_FILE >> $SQL_FOLDER"inserts_records.sql"
+              ### QUERY insert cross
               {
                 psql -h $PGSQL_HOST -U $PGSQL_USER -d $PGSQL_DBNAME -p $PGSQL_PORT -f $SQL_FOLDER$TEMP_INSERT_FILE
               } || {

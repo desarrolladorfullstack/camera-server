@@ -35,7 +35,7 @@ create unique index code_values_value_name_uindex
     on code_values (value_name);
 
 DROP VIEW IF EXISTS view_device_properties;
-CREATE VIEW view_device_properties
+CREATE MATERIALIZED VIEW view_device_properties
 AS
 SELECT concat(
     '{"datetime":"', dp.property_stamp,'",', string_agg( concat('"',
@@ -65,7 +65,7 @@ SELECT concat(
       GROUP BY dp.property_stamp, e.event_id, d.device_id;
 
 DROP VIEW IF EXISTS view_device_properties_es;
-CREATE VIEW view_device_properties_es
+CREATE MATERIALIZED VIEW view_device_properties_es
 AS
 SELECT concat(
     '{"datetime":"', dp.property_stamp,'",', string_agg( concat('"',
@@ -93,4 +93,28 @@ FROM properties p
                   AND cv.country_language_iso = cn.country_language_iso
     -- AND cn.country_language_iso ILIKE ?
 GROUP BY dp.property_stamp, e.event_id, d.device_id;
+
+DROP MATERIALIZED VIEW IF EXISTS view_property_id_by;
+create MATERIALIZED VIEW view_property_id_by AS
+SELECT distinct p.property_id, dp.device_key, dp.parent_event,
+                dp.property_stamp, p.event_key, p.property_value
+FROM properties p
+     INNER JOIN device_properties dp
+        ON dp.property_key = p.property_id
+ORDER BY p.property_id DESC;
+
+create index files_mime_type_index
+    on files (mime_type);
+
+create index files_temp_file_index
+    on files (temp_file);
+
+create index device_properties_device_key_index
+    on device_properties (device_key);
+
+create index device_properties_parent_event_index
+    on device_properties (parent_event);
+
+create index device_properties_property_key_index
+    on device_properties (property_key);
 
