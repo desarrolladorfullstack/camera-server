@@ -26,6 +26,11 @@ if [[ "$3" != "" ]]
 then
     BACKUP_FOLDER=$3
 fi
+SERVER_HOST="http://127.0.0.1:6800"
+if [[ "$4" != "" ]]
+then
+    SERVER_HOST=$4
+fi
 PGSQL_HOST="192.168.20.80"
 PGSQL_USER="spiadbadmin"
 PGSQL_DBNAME="spiaview"
@@ -153,32 +158,45 @@ do
 #        echo "psql -h $PGSQL_HOST -U $PGSQL_USER -d $PGSQL_DBNAME -p $PGSQL_PORT -f $SQL_FOLDER$TEMP_SELECT_FILE > $SQL_FOLDER$TEMP_SELECT_RESULT"
         ### QUERY validate timestamp
         {
-          psql -h $PGSQL_HOST -U $PGSQL_USER -d $PGSQL_DBNAME -p $PGSQL_PORT -f "$SQL_FOLDER$TEMP_SELECT_FILE" > "$SQL_FOLDER$TEMP_SELECT_RESULT"
-          printf "%s \n%s" "== $SQL_FOLDER$TEMP_SELECT_FILE ==" "$temp_select_file_cat"
-        } || {
-          echo "[p]SQL ERROR: (SELECT $PGSQL_TABLE_PARENT_NAME ...) >> $temp_select_file_cat"
-        }
-        echo "$temp_select_file_cat" > "${SQL_FOLDER}query_select_spia.sql"
-        result=""; while read -r line; do result="$result$line;"; done < $SQL_FOLDER$TEMP_SELECT_RESULT
-        #echo "result trim(): $result"
-        if [[ "$result" != *"(0 rows)"* ]] && [[ "$result" != *";0;(1 row)"* ]] && [[ "$result" != *";;(1 row)"* ]]
-        then
-          IFS=';' read -ra results <<< "$result"
-          end_rows=${#results}
-          for (( i = 2; i < end_rows; i++ ))
-          do
-            IFS=' | ' read -ra row <<< "${results[$i]}"
-            # && [[ "${row[0]}" != "0" ]] && [[ "${row[0]}" != *"(0 rows)"* ]]
-            if [[ "${row[0]}" != "" ]] 
-            then
-#              file_id="${row[0]}"
-#              file_key=$file_id
+          decoded_parent_event=$(echo $parent_event | xxd -r -p)
+          request_uri="/dualcam/device_properties"
+          request_uri="${request_uri}?parent_event=${decoded_parent_event}&type=count&property_stamp=${timestamp}"
+          num_properties=$(curl --location "${SERVER_HOST}${request_uri}" | jq -r ".num")
+          if ((num_properties > 0))
+          then
               timestamp=$((timestamp + 1))
               echo "timestamp exists. change milliseconds: $timestamp"
-              break
-            fi
-          done
-        fi
+          fi
+        } || {
+          echo "[curl|jq] ERROR in validate timestamp"
+          {
+            psql -h $PGSQL_HOST -U $PGSQL_USER -d $PGSQL_DBNAME -p $PGSQL_PORT -f "$SQL_FOLDER$TEMP_SELECT_FILE" > "$SQL_FOLDER$TEMP_SELECT_RESULT"
+            printf "%s \n%s" "== $SQL_FOLDER$TEMP_SELECT_FILE ==" "$temp_select_file_cat"
+          } || {
+            echo "[p]SQL ERROR: (SELECT $PGSQL_TABLE_PARENT_NAME ...) >> $temp_select_file_cat"
+          }
+          echo "$temp_select_file_cat" > "${SQL_FOLDER}query_select_spia.sql"
+          result=""; while read -r line; do result="$result$line;"; done < $SQL_FOLDER$TEMP_SELECT_RESULT
+          #echo "result trim(): $result"
+          if [[ "$result" != *"(0 rows)"* ]] && [[ "$result" != *";0;(1 row)"* ]] && [[ "$result" != *";;(1 row)"* ]]
+          then
+            IFS=';' read -ra results <<< "$result"
+            end_rows=${#results}
+            for (( i = 2; i < end_rows; i++ ))
+            do
+              IFS=' | ' read -ra row <<< "${results[$i]}"
+              # && [[ "${row[0]}" != "0" ]] && [[ "${row[0]}" != *"(0 rows)"* ]]
+              if [[ "${row[0]}" != "" ]]
+              then
+  #              file_id="${row[0]}"
+  #              file_key=$file_id
+                timestamp=$((timestamp + 1))
+                echo "timestamp exists. change milliseconds: $timestamp"
+                break
+              fi
+            done
+          fi
+        }
         # END: validate temp_file
 #        echo "()=>$input [$device_id, $timestamp,$mime_type,$file,$orientation] reading ..."
 #        echo ""
@@ -287,34 +305,48 @@ do
 #              echo "psql -h $PGSQL_HOST -U $PGSQL_USER -d $PGSQL_DBNAME -p $PGSQL_PORT -f $SQL_FOLDER$TEMP_SELECT_FILE > $SQL_FOLDER$TEMP_SELECT_RESULT"
               ### QUERY validate property
               {
-                psql -h $PGSQL_HOST -U $PGSQL_USER -d $PGSQL_DBNAME -p $PGSQL_PORT -f "$SQL_FOLDER$TEMP_SELECT_FILE" > "$SQL_FOLDER$TEMP_SELECT_RESULT"
-                temp_psql_result=$(cat "$SQL_FOLDER$TEMP_SELECT_RESULT")
-                temp_psql_result_rows=${#temp_psql_result}
-                printf "%s \n%s\n" "== $SQL_FOLDER$TEMP_SELECT_FILE ==" "total: $temp_psql_result_rows"
+                decoded_event_key=$(echo $prop_key | xxd -r -p)
+                decoded_property_value=$(echo $prop_value | xxd -r -p)
+                request_uri="/dualcam/properties"
+                request_uri="${request_uri}?event_key=${decoded_event_key}&type=max&property_value=${decoded_property_value}"
+                max_property_id=$(curl --location "${SERVER_HOST}${request_uri}" | jq -r ".max")
+                if [[ ! -z "$max_property_id" ]] && [[ "$max_property_id" != "" ]]
+                then
+                  property_key=$max_property_id
+                  echo "property exists. $property_key"
+                fi
               } || {
-                echo "[p]SQL ERROR: (SELECT $PGSQL_TABLE_NAME ... validate) >> $temp_select_file_cat"
+                echo "[curl|jq] ERROR in validate property"
+                {
+                  psql -h $PGSQL_HOST -U $PGSQL_USER -d $PGSQL_DBNAME -p $PGSQL_PORT -f "$SQL_FOLDER$TEMP_SELECT_FILE" > "$SQL_FOLDER$TEMP_SELECT_RESULT"
+                  temp_psql_result=$(cat "$SQL_FOLDER$TEMP_SELECT_RESULT")
+                  temp_psql_result_rows=${#temp_psql_result}
+                  printf "%s \n%s\n" "== $SQL_FOLDER$TEMP_SELECT_FILE ==" "total: $temp_psql_result_rows"
+                } || {
+                  echo "[p]SQL ERROR: (SELECT $PGSQL_TABLE_NAME ... validate) >> $temp_select_file_cat"
+                }
+                echo "$temp_select_file_cat" >> "${SQL_FOLDER}query_select_spia.sql"
+                result=""; while read -r line; do result="$result$line;"; done < $SQL_FOLDER$TEMP_SELECT_RESULT
+                # echo "result trim(2): $result"
+                if [[ "$result" != *"(0 rows)"* ]] && [[ "$result" != *";0;(1 row)"* ]] && [[ "$result" != *";;(1 row)"* ]]
+                then
+                  IFS=';' read -ra results <<< "$result"
+                  end_rows=${#results}
+                  for (( i = 2; i < end_rows; i++ ))
+                  do
+                    IFS=' | ' read -ra row <<< "${results[$i]}"
+                    if [[ "${row[0]}" != "" ]]
+                    then
+                      property="${row[0]} ${row[1]}"
+                      property_id="${row[0]}"
+                      property_key=$property_id
+                      echo "property exists. $property_key"
+                      echo ">>> $property"
+                      break
+                    fi
+                  done
+                fi
               }
-              echo "$temp_select_file_cat" >> "${SQL_FOLDER}query_select_spia.sql"
-              result=""; while read -r line; do result="$result$line;"; done < $SQL_FOLDER$TEMP_SELECT_RESULT              
-              # echo "result trim(2): $result"
-              if [[ "$result" != *"(0 rows)"* ]] && [[ "$result" != *";0;(1 row)"* ]] && [[ "$result" != *";;(1 row)"* ]]
-              then
-                IFS=';' read -ra results <<< "$result"
-                end_rows=${#results}
-                for (( i = 2; i < end_rows; i++ ))
-                do
-                  IFS=' | ' read -ra row <<< "${results[$i]}"
-                  if [[ "${row[0]}" != "" ]]
-                  then
-                    property="${row[0]} ${row[1]}"
-                    property_id="${row[0]}"
-                    property_key=$property_id
-                    echo "property exists. $property_key"
-                    echo ">>> $property"
-                    break
-                  fi
-                done
-              fi
               # END: validate property
               # BEGIN: validate device_property
               format_timestamp="to_timestamp($timestamp)"
