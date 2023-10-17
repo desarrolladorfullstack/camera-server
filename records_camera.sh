@@ -25,6 +25,12 @@ if [[ "$3" != "" ]]
 then
     BACKUP_FOLDER=$3
 fi
+SERVER_HOST="http://127.0.0.1:6800"
+if [[ "$4" != "" ]]
+then
+    SERVER_HOST=$4
+fi
+content_type="Content-type: application/json"
 PGSQL_HOST="192.168.20.80"
 PGSQL_USER="spiadbadmin"
 PGSQL_DBNAME="spiaview"
@@ -153,28 +159,40 @@ do
         #cat $SQL_FOLDER$TEMP_SELECT_FILE >> $SQL_FOLDER"inserts_records.sql"
         ### QUERY validate temp_file
         {
-          psql -h $PGSQL_HOST -U $PGSQL_USER -d $PGSQL_DBNAME -p $PGSQL_PORT -f "$SQL_FOLDER$TEMP_SELECT_FILE" > "$SQL_FOLDER$TEMP_SELECT_RESULT"
+          request_uri="/dualcam/file"
+          request_uri="${request_uri}?mime_type=${mime_type}&type=max&temp_file=${file}"
+          file_id=$(curl --location "${SERVER_HOST}${request_uri}" | jq -r ".max")
+          if [[ ! -z "$file_id" ]] && [[ "$file_id" != "" ]]
+          then
+            file_key=$file_id
+            echo "file_key exists: $file_id"
+          fi
         } || {
-          echo "[p]SQL ERROR: (SELECT $PGSQL_TABLE_PARENT_NAME ...) >> $temp_select_file_cat"
+          echo "[curl|jq] ERROR in validate temp_file"
+          {
+            psql -h $PGSQL_HOST -U $PGSQL_USER -d $PGSQL_DBNAME -p $PGSQL_PORT -f "$SQL_FOLDER$TEMP_SELECT_FILE" > "$SQL_FOLDER$TEMP_SELECT_RESULT"
+          } || {
+            echo "[p]SQL ERROR: (SELECT $PGSQL_TABLE_PARENT_NAME ...) >> $temp_select_file_cat"
+          }
+          result=""; while read -r line; do result="$result$line;"; done < $SQL_FOLDER$TEMP_SELECT_RESULT
+          echo "result trim(): $result"
+          if [[ "$result" != *"(0 rows)"* ]] && [[ "$result" != *";0;(1 row)"* ]] && [[ "$result" != *";;(1 row)"* ]]
+          then
+            IFS=';' read -ra results <<< "$result"
+            end_rows=${#results}
+            for (( i = 2; i < end_rows; i++ ))
+            do
+              IFS=' | ' read -ra row <<< "${results[$i]}"
+              if [[ "${row[0]}" != "" ]]
+              then
+                file_id="${row[0]}"
+                file_key=$file_id
+                echo "file_key exists: $file_id"
+                break
+              fi
+            done
+          fi
         }
-        result=""; while read -r line; do result="$result$line;"; done < $SQL_FOLDER$TEMP_SELECT_RESULT
-        echo "result trim(): $result"
-        if [[ "$result" != *"(0 rows)"* ]] && [[ "$result" != *";0;(1 row)"* ]] && [[ "$result" != *";;(1 row)"* ]]
-        then
-          IFS=';' read -ra results <<< "$result"
-          end_rows=${#results}
-          for (( i = 2; i < end_rows; i++ ))
-          do
-            IFS=' | ' read -ra row <<< "${results[$i]}"
-            if [[ "${row[0]}" != "" ]]
-            then
-              file_id="${row[0]}"
-              file_key=$file_id
-              echo "file_key exists: $file_id"
-              break
-            fi
-          done
-        fi
         # END: validate temp_file
         echo "()=>$input [$device_id, $timestamp,$mime_type,$file,$orientation] reading ..."
         echo ""
@@ -192,9 +210,25 @@ do
           cat "$SQL_FOLDER$TEMP_INSERT_FILE" >> "${SQL_FOLDER}inserts_records.sql"
           ### QUERY insert
           {
-            psql -h $PGSQL_HOST -U $PGSQL_USER -d $PGSQL_DBNAME -p $PGSQL_PORT -f "$SQL_FOLDER$TEMP_INSERT_FILE"
+            json_stamp=", \"file_stamp\": \"${timestamp}\""
+            json_mime_type=", \"mime_type\": \"${mime_type}\""
+            json_temp_type=", \"temp_file\": \"${file}\""
+            json_orientation=", \"orientation\": \"${orientation}\""
+            json="{ \"device\": \"${device_id}\"${json_stamp}${json_mime_type}${json_temp_type}${json_orientation} }"
+            request_uri="/dualcam/file/"
+            file_id=$(curl --location "${SERVER_HOST}${request_uri}" -X POST -H "${content_type}" --data "${json}" | jq -r ".file_id")
+            if [[ ! -z "$file_id" ]] && [[ "$file_id" != "" ]]
+            then
+              file_key=$file_id
+              echo "file_key created: $file_id"
+            fi
           } || {
-            echo "[p]SQL ERROR: (INSERT INTO $PGSQL_TABLE_PARENT_NAME ...) >> $temp_insert_file_cat"
+            echo "[curl|jq] ERROR on insert (file)"
+            {
+              psql -h $PGSQL_HOST -U $PGSQL_USER -d $PGSQL_DBNAME -p $PGSQL_PORT -f "$SQL_FOLDER$TEMP_INSERT_FILE"
+            } || {
+              echo "[p]SQL ERROR: (INSERT INTO $PGSQL_TABLE_PARENT_NAME ...) >> $temp_insert_file_cat"
+            }
           }
         else
           echo "validate temp_file: ${results[*]}"
@@ -243,13 +277,14 @@ do
               echo "-> ENTIRE MODE: block=\"$block\" offset=$record_offset"
               # "... lines=\"\$lines\$line\""
               # block=$lines
-              sql_insert_block="INSERT INTO $PGSQL_TABLE_NAME ($PGSQL_COLUMN)"
+              sql_insert_block=$(printf "%s \n%s" "INSERT INTO $PGSQL_TABLE_NAME" "($PGSQL_COLUMN)")
               sql_insert_block=$(printf "%s \n%s" "$sql_insert_block" "VALUES ('$block', $record_offset);")
               printf "%s\n" "$sql_insert_block" > "$SQL_FOLDER$TEMP_INSERT_FILE"
               sql_select_cross="SELECT $file_key, sq2.last_value"
-              sql_select_cross_from="FROM $PGSQL_TABLE_PARENT_SEQUENCE sq1, $PGSQL_TABLE_SEQUENCE sq2;"
+              sql_select_cross_from="FROM $PGSQL_TABLE_PARENT_SEQUENCE sq1"
+              sql_select_cross_from=$(printf "%s, \n%s;" "$sql_select_cross_from" "$PGSQL_TABLE_SEQUENCE sq2")
               sql_select_cross=$(printf "%s \n%s" "$sql_select_cross" "$sql_select_cross_from")
-              sql_insert_cross="INSERT INTO $PGSQL_TABLE_CROSS_NAME ($PGSQL_CROSS_COLUMN)"
+              sql_insert_cross=$(printf "%s \n%s" "INSERT INTO $PGSQL_TABLE_CROSS_NAME" "($PGSQL_CROSS_COLUMN)")
               sql_insert_cross=$(printf "%s \n%s" "$sql_insert_cross" "$sql_select_cross")
               echo "$sql_insert_cross" >> "$SQL_FOLDER$TEMP_INSERT_FILE"
               echo "=== CHECK $TEMP_INSERT_FILE (2) ==="
@@ -259,10 +294,23 @@ do
               #cat $SQL_FOLDER$TEMP_INSERT_FILE >> $SQL_FOLDER"inserts_records.sql"
               ### QUERY insert cross
               {
-                psql -h $PGSQL_HOST -U $PGSQL_USER -d $PGSQL_DBNAME -p $PGSQL_PORT -f $SQL_FOLDER$TEMP_INSERT_FILE
+                decoded_content_block=$(echo $block | xxd -r -p)
+                json_offset=", \"record_offset\": ${record_offset}"
+                json="{ \"content_block\": \"${decoded_content_block}\"${json_offset} }"
+                request_uri="/dualcam/records/${file_key}"
+                record_key=$(curl --location "${SERVER_HOST}${request_uri}" -X POST -H "${content_type}" --data "${json}" | jq -r ".record_key")
+                if [[ ! -z "$record_key" ]] && [[ "$record_key" != "" ]]
+                then
+                  echo "record_key created: $record_key"
+                fi
               } || {
-                echo "[p]SQL ERROR: (INSERT INTO $PGSQL_TABLE_NAME || $PGSQL_TABLE_CROSS_NAME ...)"
-                echo " >> $temp_insert_file_cat"
+                echo "[curl|jq] ERROR on insert (record & file records)"
+                {
+                  psql -h $PGSQL_HOST -U $PGSQL_USER -d $PGSQL_DBNAME -p $PGSQL_PORT -f $SQL_FOLDER$TEMP_INSERT_FILE
+                } || {
+                  echo "[p]SQL ERROR: (INSERT INTO $PGSQL_TABLE_NAME || $PGSQL_TABLE_CROSS_NAME ...)"
+                  echo " >> $temp_insert_file_cat"
+                }
               }
               record_offset=$((record_offset + 1))
               block=""
