@@ -12,5 +12,5 @@ cd $home_dir$project_dir
   python3 -V
   python3 $bot_filename ${args[*]} 2> $log_filename > $log_filename &
 } || {
-  $home_dir$project_dir"/${venv_name}/bin/python" $bot_filename ${args[*]} 2> $log_filename > $log_filename &
+  $home_dir$project_dir"/${venv_name}/bin/python3" $bot_filename ${args[*]} 2> $log_filename > $log_filename &
 }

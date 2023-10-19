@@ -161,7 +161,7 @@ do
           decoded_parent_event=$(echo $parent_event | xxd -r -p)
           request_uri="/dualcam/device_properties"
           request_uri="${request_uri}?parent_event=${decoded_parent_event}&type=count&property_stamp=${timestamp}"
-          num_properties=$(curl --location "${SERVER_HOST}${request_uri}" | jq -r ".num")
+          num_properties=$(curl -s --location "${SERVER_HOST}${request_uri}" | jq -r ".num")
           if ((num_properties > 0))
           then
               timestamp=$((timestamp + 1))
@@ -309,7 +309,7 @@ do
                 decoded_property_value=$(echo $prop_value | xxd -r -p)
                 request_uri="/dualcam/properties"
                 request_uri="${request_uri}?event_key=${decoded_event_key}&type=max&property_value=${decoded_property_value}"
-                max_property_id=$(curl --location "${SERVER_HOST}${request_uri}" | jq -r ".max")
+                max_property_id=$(curl -s --location "${SERVER_HOST}${request_uri}" | jq -r ".max")
                 if [[ ! -z "$max_property_id" ]] && [[ "$max_property_id" != "" ]]
                 then
                   property_key=$max_property_id

@@ -161,7 +161,7 @@ do
         {
           request_uri="/dualcam/file"
           request_uri="${request_uri}?mime_type=${mime_type}&type=max&temp_file=${file}"
-          file_id=$(curl --location "${SERVER_HOST}${request_uri}" | jq -r ".max")
+          file_id=$(curl -s --location "${SERVER_HOST}${request_uri}" | jq -r ".max")
           if [[ ! -z "$file_id" ]] && [[ "$file_id" != "" ]]
           then
             file_key=$file_id
@@ -216,7 +216,7 @@ do
             json_orientation=", \"orientation\": \"${orientation}\""
             json="{ \"device\": \"${device_id}\"${json_stamp}${json_mime_type}${json_temp_type}${json_orientation} }"
             request_uri="/dualcam/file/"
-            file_id=$(curl --location "${SERVER_HOST}${request_uri}" -X POST -H "${content_type}" --data "${json}" | jq -r ".file_id")
+            file_id=$(curl -s --location "${SERVER_HOST}${request_uri}" -X POST -H "${content_type}" --data "${json}" | jq -r ".file_id")
             if [[ ! -z "$file_id" ]] && [[ "$file_id" != "" ]]
             then
               file_key=$file_id
@@ -294,11 +294,16 @@ do
               #cat $SQL_FOLDER$TEMP_INSERT_FILE >> $SQL_FOLDER"inserts_records.sql"
               ### QUERY insert cross
               {
-                decoded_content_block=$(echo $block | xxd -r -p)
+                {
+                  decoded_content_block=$(echo "$block" | xxd -r -p)
+                } || {
+                  echo "[xxd] ERROR on insert (record & file records) => '$block'"
+                  decoded_content_block="0x${block}"
+                }
                 json_offset=", \"record_offset\": ${record_offset}"
                 json="{ \"content_block\": \"${decoded_content_block}\"${json_offset} }"
                 request_uri="/dualcam/records/${file_key}"
-                record_key=$(curl --location "${SERVER_HOST}${request_uri}" -X POST -H "${content_type}" --data "${json}" | jq -r ".record_key")
+                record_key=$(curl -s --location "${SERVER_HOST}${request_uri}" -X POST -H "${content_type}" --data "${json}" | jq -r ".record_key")
                 if [[ ! -z "$record_key" ]] && [[ "$record_key" != "" ]]
                 then
                   echo "record_key created: $record_key"
